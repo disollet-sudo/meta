@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Metas por Representante</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #0f1720;
+    --panel: #161f2b;
+    --panel-2: #1c2735;
+    --border: #26313f;
+    --text: #e7edf3;
+    --muted: #8b98a8;
+    --accent: #3fb68a;
+    --accent-soft: rgba(63,182,138,0.14);
+    --warn: #e0a63f;
+    --warn-soft: rgba(224,166,63,0.14);
+    --danger: #e0663f;
+    --danger-soft: rgba(224,102,63,0.14);
+    --font-display: 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'Consolas', 'SFMono-Regular', monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-display); min-height:100vh;
+  }
+  header{
+    padding:28px 32px 20px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+  }
+  header h1{margin:0; font-size:22px; font-weight:700; letter-spacing:-0.3px}
+  header p{margin:4px 0 0; color:var(--muted); font-size:13px}
+
+  .search-box{display:flex; gap:8px; align-items:center}
+  .search-box input, .search-box select{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:10px 14px; border-radius:8px; font-size:14px; min-width:220px;
+  }
+  .search-box button{
+    background:var(--accent); border:none; color:#04241a; font-weight:700;
+    padding:10px 18px; border-radius:8px; cursor:pointer; font-size:14px;
+  }
+  .search-box button:hover{filter:brightness(1.08)}
+
+  /* ---- chips de representantes ---- */
+  .reps-bar{
+    padding:14px 32px; border-bottom:1px solid var(--border);
+    display:flex; gap:8px; overflow-x:auto; align-items:center;
+  }
+  .reps-bar::-webkit-scrollbar{height:6px}
+  .reps-bar::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px}
+  .chip{
+    flex:0 0 auto; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:8px 14px; border-radius:20px; font-size:12.5px; cursor:pointer; white-space:nowrap;
+    transition:background .15s, border-color .15s;
+  }
+  .chip:hover{border-color:var(--accent)}
+  .chip.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:700}
+  .chip.todos{font-weight:700}
+
+  main{padding:24px 32px 60px; max-width:1200px; margin:0 auto}
+
+  .config-banner{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:16px 18px; margin-bottom:20px; font-size:13px; color:var(--muted);
+  }
+  .config-banner code{background:var(--panel-2); padding:2px 6px; border-radius:4px; color:var(--text)}
+
+  .toolbar{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+    margin-bottom:18px;
+  }
+  .toolbar .titulo-atual{font-size:18px; font-weight:800}
+  .toolbar .titulo-atual .tag{
+    font-size:11px; font-weight:700; color:var(--muted); background:var(--panel-2);
+    border:1px solid var(--border); padding:3px 8px; border-radius:20px; margin-left:8px; vertical-align:middle;
+  }
+
+  .periodo-toggle{display:flex; gap:6px; align-items:center; background:var(--panel-2);
+    border:1px solid var(--border); border-radius:10px; padding:4px}
+  .periodo-toggle button{
+    background:transparent; border:none; color:var(--muted); padding:7px 14px; border-radius:8px;
+    cursor:pointer; font-size:13px; font-weight:600;
+  }
+  .periodo-toggle button.active{background:var(--accent); color:#04241a}
+  .periodo-toggle select{
+    background:transparent; border:none; color:var(--text); font-size:13px; padding:6px 4px; cursor:pointer;
+  }
+  .periodo-toggle select:disabled{color:var(--muted); cursor:not-allowed}
+
+  .grid{display:grid; grid-template-columns: 1.4fr 1fr; gap:20px; margin-top:20px}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px;
+  }
+  .card h2{margin:0 0 4px; font-size:15px; font-weight:700}
+  .card .sub{color:var(--muted); font-size:12px; margin-bottom:14px}
+
+  .kpis{display:flex; gap:14px; margin-bottom:18px; flex-wrap:wrap}
+  .kpi{
+    background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
+    padding:12px 16px; flex:1; min-width:150px;
+  }
+  .kpi .value{font-size:22px; font-weight:800; font-family:var(--font-mono)}
+  .kpi .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px}
+  .kpi.destaque{border-color:var(--accent)}
+  .kpi.destaque .value{color:var(--accent)}
+  .kpi.perc.baixo .value{color:var(--danger)}
+  .kpi.perc.medio .value{color:var(--warn)}
+  .kpi.perc.alto .value{color:var(--accent)}
+
+  .progress-outer{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; height:8px; overflow:hidden; margin:4px 0 18px}
+  .progress-inner{height:100%; background:var(--accent); border-radius:8px}
+
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th{text-align:left; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;
+     letter-spacing:0.4px; padding:8px 10px; border-bottom:1px solid var(--border)}
+  td{padding:9px 10px; border-bottom:1px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  tr.linkable{cursor:pointer}
+  tr.linkable:hover td{background:var(--panel-2)}
+
+  .badge{
+    display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;
+  }
+  .badge.ok{background:var(--accent-soft); color:var(--accent)}
+  .badge.previsto{background:var(--warn-soft); color:var(--warn)}
+  .badge.atrasado{background:var(--danger-soft); color:var(--danger)}
+
+  .empty{color:var(--muted); font-size:13px; padding:20px 0; text-align:center}
+  #status{font-size:12px; color:var(--muted); margin-top:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Painel de Metas por Representante</h1>
+    <p>Meta mensal calculada pelo ciclo médio de compra de cada cliente</p>
+  </div>
+  <div class="search-box">
+    <input list="lista-reps" id="repInput" placeholder="Código do representante (ex: 600086)">
+    <datalist id="lista-reps"></datalist>
+    <button onclick="buscarPorInput()">Buscar</button>
+  </div>
+</header>
+
+<div class="reps-bar" id="repsBar">
+  <div class="chip todos active" id="chipTodos" onclick="selecionarRep(null)">Todos os representantes</div>
+</div>
+
+<main>
+  <div class="toolbar">
+    <div class="titulo-atual" id="tituloAtual">Visão geral <span class="tag">todos os representantes</span></div>
+    <div class="periodo-toggle">
+      <button id="btnMes" class="active" onclick="setPeriodo('mes')">Mês</button>
+      <select id="selectMes" onchange="renderTudo()"></select>
+      <button id="btnAno" onclick="setPeriodo('ano')">Ano</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="progress-outer"><div class="progress-inner" id="progressoBar" style="width:0%"></div></div>
+
+  <div class="grid">
+    <div class="card">
+      <h2 id="chartTitulo">Previsto x Realizado — mês a mês</h2>
+      <div class="sub">Meta prevista pelo ciclo de cada cliente comparada ao que já foi comprado</div>
+      <canvas id="chartMeta" height="220"></canvas>
+    </div>
+
+    <div class="card">
+      <h2 id="listaTitulo">Clientes atrasados</h2>
+      <div class="sub" id="listaSub">Clientes que passaram do ciclo médio esperado, em todos os representantes</div>
+      <div id="listaClientes"><div class="empty">Carregando...</div></div>
+    </div>
+  </div>
+
+  <div id="status"></div>
+</main>
+
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyPcR8JgvcIaN46rcDq9OCjK_Uzy_6QesX3ikgRCGqaH30_JTTpsOIyxp7_JHVJ7THI1Q/exec';
+
+const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+let chart;
+let allData = null;        // { metas, clientes, representantesDisponiveis } - dataset completo, sem filtro
+let selectedRep = null;    // código do representante selecionado, ou null = "todos"
+let periodo = 'mes';       // 'mes' | 'ano'
+let mesSelecionado = new Date().getMonth() + 1;
+
+function popularSelectMeses(){
+  const sel = document.getElementById('selectMes');
+  sel.innerHTML = '';
+  MESES.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = i + 1;
+    opt.textContent = m;
+    if (i + 1 === mesSelecionado) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function setPeriodo(p){
+  periodo = p;
+  document.getElementById('btnMes').classList.toggle('active', p === 'mes');
+  document.getElementById('btnAno').classList.toggle('active', p === 'ano');
+  document.getElementById('selectMes').disabled = (p === 'ano');
+  renderTudo();
+}
+
+async function init(){
+  popularSelectMeses();
+  document.getElementById('status').textContent = 'Carregando dados...';
+  try{
+    const r = await fetch(APPS_SCRIPT_URL);
+    const data = await r.json();
+    if(!data.ok){
+      document.getElementById('status').textContent = data.erro || 'Erro ao carregar dados.';
+      return;
+    }
+    allData = data;
+    renderChips();
+    popularDatalist();
+    renderTudo();
+    document.getElementById('status').textContent = 'Atualizado em ' + new Date(data.geradoEm).toLocaleString('pt-BR');
+  }catch(err){
+    document.getElementById('status').textContent = 'Não foi possível conectar ao Apps Script. Verifique a URL configurada em APPS_SCRIPT_URL.';
+  }
+}
+
+function popularDatalist(){
+  const dl = document.getElementById('lista-reps');
+  dl.innerHTML = '';
+  (allData.representantesDisponiveis || []).forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.split(' - ')[0];
+    opt.label = r;
+    dl.appendChild(opt);
+  });
+}
+
+function renderChips(){
+  const bar = document.getElementById('repsBar');
+  const reps = allData.representantesDisponiveis || [];
+  // remove chips antigos, mantém o "Todos"
+  bar.querySelectorAll('.chip:not(.todos)').forEach(el => el.remove());
+  reps.forEach(r => {
+    const [codigo, ...nomeParts] = r.split(' - ');
+    const nome = nomeParts.join(' - ');
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.dataset.rep = codigo;
+    chip.textContent = nome ? (codigo + ' · ' + nome) : codigo;
+    chip.onclick = () => selecionarRep(codigo);
+    bar.appendChild(chip);
+  });
+}
+
+function marcarChipAtiva(){
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  if(!selectedRep){
+    document.getElementById('chipTodos').classList.add('active');
+  } else {
+    const alvo = document.querySelector('.chip[data-rep="' + CSS.escape(selectedRep) + '"]');
+    if(alvo) alvo.classList.add('active');
+  }
+}
+
+function selecionarRep(codigo){
+  selectedRep = codigo;
+  document.getElementById('repInput').value = codigo || '';
+  marcarChipAtiva();
+  renderTudo();
+}
+
+function buscarPorInput(){
+  const rep = document.getElementById('repInput').value.trim();
+  selecionarRep(rep || null);
+}
+
+// -------- filtros do dataset com base no representante selecionado --------
+function dadosFiltrados(){
+  if(!allData) return { metas: [], clientes: [] };
+  if(!selectedRep){
+    return { metas: allData.metas, clientes: allData.clientes };
+  }
+  return {
+    metas: allData.metas.filter(m => String(m.Cod_Repres) === String(selectedRep)),
+    clientes: allData.clientes.filter(c => String(c.Cod_Repres) === String(selectedRep))
+  };
+}
+
+function agregarPorMes(metas){
+  const previstoPorMes = new Array(12).fill(0);
+  const realizadoPorMes = new Array(12).fill(0);
+  (metas || []).forEach(m => {
+    const idx = Number(m.Mes) - 1;
+    if(idx < 0 || idx > 11) return;
+    previstoPorMes[idx] += Number(m.Previsto) || 0;
+    realizadoPorMes[idx] += Number(m.Realizado) || 0;
+  });
+  return { previstoPorMes, realizadoPorMes };
+}
+
+function somaPeriodo(previstoPorMes, realizadoPorMes){
+  if(periodo === 'ano'){
+    return {
+      previsto: previstoPorMes.reduce((a,b)=>a+b,0),
+      realizado: realizadoPorMes.reduce((a,b)=>a+b,0)
+    };
+  }
+  const idx = mesSelecionado - 1;
+  return { previsto: previstoPorMes[idx] || 0, realizado: realizadoPorMes[idx] || 0 };
+}
+
+function fmtMoeda(v){
+  return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+}
+
+function renderTudo(){
+  if(!allData) return;
+  mesSelecionado = Number(document.getElementById('selectMes').value) || mesSelecionado;
+
+  const { metas, clientes } = dadosFiltrados();
+  const { previstoPorMes, realizadoPorMes } = agregarPorMes(metas);
+  const { previsto, realizado } = somaPeriodo(previstoPorMes, realizadoPorMes);
+
+  renderTitulo();
+  renderKpis(previsto, realizado, clientes);
+  renderChart(previstoPorMes, realizadoPorMes);
+  renderClientes(clientes);
+}
+
+function renderTitulo(){
+  const titulo = document.getElementById('tituloAtual');
+  if(!selectedRep){
+    titulo.innerHTML = 'Visão geral <span class="tag">todos os representantes</span>';
+  } else {
+    const rep = (allData.representantesDisponiveis || []).find(r => r.startsWith(selectedRep + ' - '));
+    const nome = rep ? rep.split(' - ').slice(1).join(' - ') : '';
+    titulo.innerHTML = (nome || ('Representante ' + selectedRep)) + ' <span class="tag">' + selectedRep + '</span>';
+  }
+  document.getElementById('chartTitulo').textContent =
+    'Previsto x Realizado — mês a mês' + (selectedRep ? '' : ' (todos os representantes)');
+  document.getElementById('listaTitulo').textContent = selectedRep ? 'Clientes' : 'Clientes atrasados';
+  document.getElementById('listaSub').textContent = selectedRep
+    ? 'Situação de cada cliente deste representante'
+    : 'Clientes que passaram do ciclo médio esperado, em todos os representantes';
+}
+
+function renderKpis(previsto, realizado, clientes){
+  const atrasados = (clientes || []).filter(c => c.Status === 'Atrasado').length;
+  const perc = previsto > 0 ? Math.round((realizado / previsto) * 1000) / 10 : 0;
+  const labelPeriodo = periodo === 'ano' ? ('Ano ' + new Date().getFullYear()) : MESES[mesSelecionado - 1];
+
+  let percClasse = 'baixo';
+  if(perc >= 90) percClasse = 'alto';
+  else if(perc >= 50) percClasse = 'medio';
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi destaque"><div class="value">${fmtMoeda(previsto)}</div><div class="label">Meta prevista · ${labelPeriodo}</div></div>
+    <div class="kpi"><div class="value">${fmtMoeda(realizado)}</div><div class="label">Realizado · ${labelPeriodo}</div></div>
+    <div class="kpi perc ${percClasse}"><div class="value">${perc}%</div><div class="label">Atingido</div></div>
+    <div class="kpi"><div class="value">${(clientes||[]).length}</div><div class="label">Clientes ativos</div></div>
+    <div class="kpi"><div class="value">${atrasados}</div><div class="label">Atrasados</div></div>
+  `;
+
+  const pct = Math.max(0, Math.min(100, perc));
+  document.getElementById('progressoBar').style.width = pct + '%';
+}
+
+function renderChart(previstoPorMes, realizadoPorMes){
+  const ctx = document.getElementById('chartMeta').getContext('2d');
+  if(chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: MESES,
+      datasets: [
+        { label: 'Previsto', data: previstoPorMes, backgroundColor: 'rgba(63,182,138,0.35)', borderRadius: 6 },
+        { label: 'Realizado', data: realizadoPorMes, backgroundColor: '#3fb68a', borderRadius: 6 }
+      ]
+    },
+    options: {
+      plugins: {
+        legend: { display: true, labels: { color: '#8b98a8', boxWidth: 12, font: { size: 11 } } }
+      },
+      scales: {
+        y: { ticks: { color: '#8b98a8' }, grid: { color: '#26313f' } },
+        x: { ticks: { color: '#8b98a8' }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderClientes(clientes){
+  const el = document.getElementById('listaClientes');
+  let lista = clientes || [];
+
+  // na visão "todos", foca na lista de atrasados (senão ficaria enorme); na visão individual, mostra todos
+  if(!selectedRep){
+    lista = lista.filter(c => c.Status === 'Atrasado');
+  }
+
+  if(!lista.length){
+    el.innerHTML = '<div class="empty">' + (selectedRep ? 'Nenhum cliente encontrado.' : 'Nenhum cliente atrasado no momento.') + '</div>';
+    return;
+  }
+
+  const mostrarColunaRep = !selectedRep;
+
+  const linhas = lista.map(c => {
+    let badge = '';
+    if(c.Status === 'Atrasado') badge = '<span class="badge atrasado">Atrasado</span>';
+    else if(c.Status === 'Comprou este mês') badge = '<span class="badge ok">Comprou</span>';
+    else if(c.Status === 'Previsto este mês') badge = '<span class="badge previsto">Previsto</span>';
+    const valor = Number(c.Valor_Previsto_Mes_Atual) || 0;
+    const repCell = mostrarColunaRep ? `<td>${c.Cod_Repres}</td>` : '';
+    const clickAttr = mostrarColunaRep ? ` onclick="selecionarRep('${String(c.Cod_Repres).replace(/'/g,"")}')"` : '';
+    const rowClass = mostrarColunaRep ? 'linkable' : '';
+    return `<tr class="${rowClass}"${clickAttr}>
+      <td>${c.Nome_completo}</td>
+      ${repCell}
+      <td>${c.Ciclo_Medio_Dias || '—'} dias</td>
+      <td>${valor ? fmtMoeda(valor) : '—'}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Cliente</th>
+      ${mostrarColunaRep ? '<th>Repres.</th>' : ''}
+      <th>Ciclo</th>
+      <th>Valor previsto</th>
+      <th>Status</th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+  </table>`;
+}
+
+init();
+</script>
+</body>
+</html>
