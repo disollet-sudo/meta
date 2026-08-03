@@ -63,12 +63,6 @@
 
   main{padding:24px 32px 60px; max-width:1200px; margin:0 auto}
 
-  .config-banner{
-    background:var(--panel); border:1px solid var(--border); border-radius:10px;
-    padding:16px 18px; margin-bottom:20px; font-size:13px; color:var(--muted);
-  }
-  .config-banner code{background:var(--panel-2); padding:2px 6px; border-radius:4px; color:var(--text)}
-
   .toolbar{
     display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
     margin-bottom:18px;
@@ -99,6 +93,7 @@
   }
   .card h2{margin:0 0 4px; font-size:15px; font-weight:700}
   .card .sub{color:var(--muted); font-size:12px; margin-bottom:14px}
+  .card .sub strong{color:var(--accent); font-weight:700}
 
   .kpis{display:flex; gap:14px; margin-bottom:18px; flex-wrap:wrap}
   .kpi{
@@ -174,8 +169,8 @@
     </div>
 
     <div class="card">
-      <h2 id="listaTitulo">Clientes atrasados</h2>
-      <div class="sub" id="listaSub">Clientes que passaram do ciclo médio esperado, em todos os representantes</div>
+      <h2 id="listaTitulo">Clientes Previstos no Mês</h2>
+      <div class="sub" id="listaSub">Clientes com previsão de compra no mês selecionado</div>
       <div id="listaClientes"><div class="empty">Carregando...</div></div>
     </div>
   </div>
@@ -184,13 +179,13 @@
 </main>
 
 <script>
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBj6FrKOPpqPEzFgHtkuJlm9TFylKcLGnCsGqskx1eZIi-Qi5RpHkuvwYXbOaYvKmZ-Q/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyCXBaVS-t-hSmhPElhcQ2XiWmPXc_EfRDiy37xQdaDkfgJaBbw-S7q6yGRgHzaxniw9w/exec';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 let chart;
-let allData = null;        // { metas, clientes, representantesDisponiveis } - dataset completo, sem filtro
-let selectedRep = null;    // código do representante selecionado, ou null = "todos"
+let allData = null;        // dataset completo
+let selectedRep = null;    // representante selecionado
 let periodo = 'mes';       // 'mes' | 'ano'
 let mesSelecionado = new Date().getMonth() + 1;
 
@@ -248,7 +243,6 @@ function popularDatalist(){
 function renderChips(){
   const bar = document.getElementById('repsBar');
   const reps = allData.representantesDisponiveis || [];
-  // remove chips antigos, mantém o "Todos"
   bar.querySelectorAll('.chip:not(.todos)').forEach(el => el.remove());
   reps.forEach(r => {
     const [codigo, ...nomeParts] = r.split(' - ');
@@ -284,7 +278,6 @@ function buscarPorInput(){
   selecionarRep(rep || null);
 }
 
-// -------- filtros do dataset com base no representante selecionado --------
 function dadosFiltrados(){
   if(!allData) return { metas: [], clientes: [] };
   if(!selectedRep){
@@ -320,7 +313,7 @@ function somaPeriodo(previstoPorMes, realizadoPorMes){
 }
 
 function fmtMoeda(v){
-  return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function renderTudo(){
@@ -348,10 +341,8 @@ function renderTitulo(){
   }
   document.getElementById('chartTitulo').textContent =
     'Previsto x Realizado — mês a mês' + (selectedRep ? '' : ' (todos os representantes)');
-  document.getElementById('listaTitulo').textContent = selectedRep ? 'Clientes' : 'Clientes atrasados';
-  document.getElementById('listaSub').textContent = selectedRep
-    ? 'Situação de cada cliente deste representante'
-    : 'Clientes que passaram do ciclo médio esperado, em todos os representantes';
+  
+  document.getElementById('listaTitulo').textContent = 'Clientes Previstos no Mês';
 }
 
 function renderKpis(previsto, realizado, clientes){
@@ -403,13 +394,25 @@ function renderClientes(clientes){
   const el = document.getElementById('listaClientes');
   let lista = clientes || [];
 
-  // na visão "todos", foca na lista de atrasados (senão ficaria enorme); na visão individual, mostra todos
-  if(!selectedRep){
-    lista = lista.filter(c => c.Status === 'Atrasado');
-  }
+  // FILTRO: Pega somente os clientes previstos para o MÊS SELECIONADO
+  lista = lista.filter(c => {
+    if (!c.Meses_Previstos) return false;
+    const meses = String(c.Meses_Previstos).split(',').map(m => m.trim());
+    return meses.includes(String(mesSelecionado));
+  });
+
+  // SOMATÓRIO DOS VALORES PREVISTOS
+  const somaTotalValorPrevisto = lista.reduce((acc, c) => {
+    const val = Number(c.Valor_Previsto || c.Valor_Previsto_Mes_Atual) || 0;
+    return acc + val;
+  }, 0);
+
+  const nomeMes = MESES[mesSelecionado - 1];
+  const subEl = document.getElementById('listaSub');
+  subEl.innerHTML = `Clientes projetados para <strong>${nomeMes}</strong> | Somatório: <strong>${fmtMoeda(somaTotalValorPrevisto)}</strong>`;
 
   if(!lista.length){
-    el.innerHTML = '<div class="empty">' + (selectedRep ? 'Nenhum cliente encontrado.' : 'Nenhum cliente atrasado no momento.') + '</div>';
+    el.innerHTML = '<div class="empty">Nenhum cliente previsto para ' + nomeMes + '.</div>';
     return;
   }
 
@@ -419,16 +422,18 @@ function renderClientes(clientes){
     let badge = '';
     if(c.Status === 'Atrasado') badge = '<span class="badge atrasado">Atrasado</span>';
     else if(c.Status === 'Comprou este mês') badge = '<span class="badge ok">Comprou</span>';
-    else if(c.Status === 'Previsto este mês') badge = '<span class="badge previsto">Previsto</span>';
-    const valor = Number(c.Valor_Previsto_Mes_Atual) || 0;
+    else badge = '<span class="badge previsto">Previsto</span>';
+
+    const valor = Number(c.Valor_Previsto || c.Valor_Previsto_Mes_Atual) || 0;
     const repCell = mostrarColunaRep ? `<td>${c.Cod_Repres}</td>` : '';
     const clickAttr = mostrarColunaRep ? ` onclick="selecionarRep('${String(c.Cod_Repres).replace(/'/g,"")}')"` : '';
     const rowClass = mostrarColunaRep ? 'linkable' : '';
+
     return `<tr class="${rowClass}"${clickAttr}>
       <td>${c.Nome_completo}</td>
       ${repCell}
       <td>${c.Ciclo_Medio_Dias || '—'} dias</td>
-      <td>${valor ? fmtMoeda(valor) : '—'}</td>
+      <td style="font-weight:700; color:var(--accent);">${valor ? fmtMoeda(valor) : '—'}</td>
       <td>${badge}</td>
     </tr>`;
   }).join('');
