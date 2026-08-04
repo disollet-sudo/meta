@@ -267,7 +267,7 @@
   </div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDE7_9p6rFyklwgQ_czOLRnIf4wegApgiqf0v8yzdqJlFsAcUl5qGguDIdycKKOCySxA/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxHEXTF5C2979nZE9c3M9lIemXm1Q_Byrn_NaVAqCRv0Ol9ftIJUEIf29r2oVkS-X9hdQ/exec";
     var MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
     
     var chartInstance = null;
@@ -294,15 +294,18 @@
     function carregarRepsEClientes() {
       chamarApi('listaReps').then(function(reps) {
         var sel = document.getElementById('seletor-rep');
+        sel.innerHTML = '<option value="TODOS">Todos os Representantes</option>';
         reps.forEach(function(r) {
           var opt = document.createElement('option');
-          opt.value = r; opt.textContent = 'Rep ' + r;
+          opt.value = r.cod;
+          opt.textContent = r.cod + ' - ' + r.nome;
           sel.appendChild(opt);
         });
       });
 
       chamarApi('listaClientes').then(function(clientes) {
         var dl = document.getElementById('lista-clientes');
+        dl.innerHTML = '';
         clientes.forEach(function(c) {
           var opt = document.createElement('option');
           opt.value = c.cod + " - " + c.nome;
