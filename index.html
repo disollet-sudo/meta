@@ -59,6 +59,9 @@
   <div id="conteudo" class="loading">Carregando...</div>
 
   <script>
+    // ⚠️ COLE AQUI A URL /exec do seu Web App (Implantar → Gerenciar implantações)
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyEPupPjb1kdRJw1mixIGr2PmIw7A-Htgcbx6LEHa2NZ_yZUBREmjzr8r_HjFqc9vzD9Q/exec";
+
     var STATUS_CLASS = {
       "Atrasado — ligar agora": "status-atrasado",
       "Comprar em breve": "status-breve",
@@ -70,6 +73,25 @@
 
     function fmtMoeda(v) {
       return "R$ " + Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function chamarApi(action, params) {
+      var url = APPS_SCRIPT_URL + '?action=' + action;
+      Object.keys(params || {}).forEach(function(k) {
+        url += '&' + k + '=' + encodeURIComponent(params[k]);
+      });
+      return fetch(url)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data && data.erro) throw new Error(data.erro);
+          return data;
+        })
+        .catch(function(err) {
+          document.getElementById('conteudo').innerHTML =
+            '<p style="color:#c5221f">Erro ao carregar dados: ' + err.message +
+            '<br>Confira se APPS_SCRIPT_URL está correta e se o Web App está implantado com acesso "Qualquer pessoa".</p>';
+          throw err;
+        });
     }
 
     function setBreadcrumb(items) {
@@ -84,7 +106,7 @@
     function carregarReps() {
       setBreadcrumb([{ label: 'Representantes', onclick: 'carregarReps()' }]);
       document.getElementById('conteudo').innerHTML = '<div class="loading">Carregando representantes...</div>';
-      google.script.run.withSuccessHandler(renderReps).getResumoReps();
+      chamarApi('resumoReps').then(renderReps).catch(function(){});
     }
 
     function renderReps(reps) {
@@ -122,7 +144,9 @@
         { label: 'Rep ' + rep, onclick: 'carregarClientes(\'' + rep + '\')' }
       ]);
       document.getElementById('conteudo').innerHTML = '<div class="loading">Carregando clientes...</div>';
-      google.script.run.withSuccessHandler(function(clientes) { renderClientes(clientes, rep); }).getClientesPorRep(rep);
+      chamarApi('clientesPorRep', { rep: rep })
+        .then(function(clientes) { renderClientes(clientes, rep); })
+        .catch(function(){});
     }
 
     function renderClientes(clientes, rep) {
@@ -155,7 +179,7 @@
         { label: 'Cliente', onclick: '' }
       ]);
       document.getElementById('conteudo').innerHTML = '<div class="loading">Carregando cliente...</div>';
-      google.script.run.withSuccessHandler(renderCliente).getDetalheCliente(cod);
+      chamarApi('detalheCliente', { cod: cod }).then(renderCliente).catch(function(){});
     }
 
     function renderCliente(dados) {
