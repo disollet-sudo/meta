@@ -64,6 +64,18 @@
       align-self: flex-end;
     }
     .btn-clear:hover { background: #e8eaed; }
+    .btn-pendentes {
+      padding: 8px 14px;
+      background: #fce8e6;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      color: #c5221f;
+      align-self: flex-end;
+    }
+    .btn-pendentes:hover { background: #fad2cf; }
 
     /* DASHBOARD LAYOUT GRID */
     .main-grid {
@@ -170,6 +182,7 @@
       box-shadow: 0 10px 25px rgba(0,0,0,0.2);
       overflow: hidden;
     }
+    .modal-card.wide { max-width: 760px; }
     .modal-header {
       padding: 16px 20px;
       background: #1a73e8;
@@ -178,6 +191,7 @@
       justify-content: space-between;
       align-items: center;
     }
+    .modal-header.danger { background: #c5221f; }
     .modal-header h3 { margin: 0; font-size: 16px; }
     .modal-close {
       background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;
@@ -195,12 +209,15 @@
       padding: 12px;
       border-radius: 8px;
     }
+    .stats-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
     .stat-box { font-size: 12px; }
     .stat-box span { color: #5f6368; display: block; }
     .stat-box b { font-size: 14px; color: #202124; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { padding: 8px 10px; font-size: 12px; text-align: left; border-bottom: 1px solid #f1f3f4; }
     th { background: #f8f9fa; color: #5f6368; }
+    tr.row-click { cursor: pointer; }
+    tr.row-click:hover { background: #e8f0fe; }
   </style>
 </head>
 <body>
@@ -222,6 +239,7 @@
       </select>
     </div>
 
+    <button class="btn-pendentes" onclick="abrirPendentes()">🔴 Ver Pendentes</button>
     <button class="btn-clear" onclick="limparFiltros()">Limpar Filtros</button>
   </div>
 
@@ -246,7 +264,7 @@
       </div>
       <div class="side-content" id="conteudo-side">
         <p style="color: #5f6368; font-size: 13px; text-align: center; margin-top: 40px;">
-          Clique em qualquer barra do mês para ver quem comprou, quem deveria comprar e quem está em atraso acumulado.
+          Clique em qualquer barra do mês para ver quem comprou e quem deveria comprar.
         </p>
       </div>
     </div>
@@ -266,8 +284,21 @@
     </div>
   </div>
 
+  <!-- POPUP MODAL DE PENDENTES -->
+  <div class="modal-overlay" id="modal-pendentes">
+    <div class="modal-card wide">
+      <div class="modal-header danger">
+        <h3>🔴 Clientes Pendentes (data atual para trás)</h3>
+        <button class="modal-close" onclick="fecharPendentes()">&times;</button>
+      </div>
+      <div class="modal-body" id="pendentes-conteudo">
+        Carregando pendências...
+      </div>
+    </div>
+  </div>
+
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbynxAd1x7nXMPaA5NH_kU-pFig2mVe2zuKzjOLaCE7i8Wcc97MaEdvEftW8qyrcnPQknQ/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQ9JI_I9dSIA7MIfd2mQe2Z1ZRVm6Prux8iUCgzWWXcFhmeKxQ8ZBhiFLn3LNg9WV2zA/exec";
     var MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
     
     var chartInstance = null;
@@ -357,11 +388,6 @@
                 label: 'Meta / Projeção (R$)',
                 data: dados.map(function(d){ return d.meta; }),
                 backgroundColor: '#1a73e8'
-              },
-              {
-                label: 'Atrasos Acumulados (R$)',
-                data: dados.map(function(d){ return d.atrasadoCarregado; }),
-                backgroundColor: '#d93025'
               }
             ]
           },
@@ -413,17 +439,6 @@
         });
         html += '</div>';
 
-        // Section: Atrasados Acumulados
-        html += '<div><div class="section-title badge-atrasado"><span>🔴 Atrasados Acumulados</span><span>' + res.atrasados.length + '</span></div>';
-        if (res.atrasados.length === 0) html += '<p style="font-size:12px; color:#999;">Nenhum atraso pendente.</p>';
-        res.atrasados.forEach(function(c) {
-          html += '<div class="client-item" style="border-left: 4px solid #d93025;" onclick="abrirModal(\'' + c.cod_cliente + '\')">' +
-            '<div class="name">' + c.nome + '</div>' +
-            '<div class="sub"><span style="color:#c5221f;">Original: ' + c.dataOriginal + '</span><span>' + fmtMoeda(c.valorEsperado) + '</span></div>' +
-            '</div>';
-        });
-        html += '</div>';
-
         document.getElementById('conteudo-side').innerHTML = html;
       });
     }
@@ -460,6 +475,50 @@
 
     function fecharModal() {
       document.getElementById('modal-cliente').style.display = 'none';
+    }
+
+    // Modal de Clientes Pendentes (sempre da data atual pra trás)
+    function abrirPendentes() {
+      document.getElementById('modal-pendentes').style.display = 'flex';
+      document.getElementById('pendentes-conteudo').innerHTML = "Carregando pendências...";
+
+      var rep = document.getElementById('seletor-rep').value;
+
+      chamarApi('clientesPendentes', { rep: rep, cod: clienteSelecionadoCod }).then(function(res) {
+        var html = '<div class="stats-grid cols-3">' +
+          '<div class="stat-box"><span>Qtd. Pendentes</span><b>' + res.qtdPendentes + '</b></div>' +
+          '<div class="stat-box"><span>Total Pendente</span><b>' + fmtMoeda(res.totalPendente) + '</b></div>' +
+          '<div class="stat-box"><span>Ordenado por</span><b>Mais atrasado primeiro</b></div>' +
+          '</div>';
+
+        html += '<table><thead><tr><th>Cliente</th><th>Rep</th><th>Previsto para</th><th>Valor Esperado</th><th>Dias Atraso</th></tr></thead><tbody>';
+
+        if (res.pendentes.length === 0) {
+          html += '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum cliente pendente no momento 🎉</td></tr>';
+        }
+
+        res.pendentes.forEach(function(p) {
+          html += '<tr class="row-click" onclick="fecharPendentesEAbrirCliente(\'' + p.cod_cliente + '\')">' +
+            '<td>' + p.nome + '</td>' +
+            '<td>' + p.rep + '</td>' +
+            '<td>' + p.dataPrevista + '</td>' +
+            '<td>' + fmtMoeda(p.valorEsperado) + '</td>' +
+            '<td style="color:#c5221f; font-weight:700;">' + p.diasAtraso + ' dias</td>' +
+            '</tr>';
+        });
+
+        html += '</tbody></table>';
+        document.getElementById('pendentes-conteudo').innerHTML = html;
+      });
+    }
+
+    function fecharPendentes() {
+      document.getElementById('modal-pendentes').style.display = 'none';
+    }
+
+    function fecharPendentesEAbrirCliente(cod) {
+      fecharPendentes();
+      abrirModal(cod);
     }
   </script>
 </body>
