@@ -218,9 +218,52 @@
     th { background: #f8f9fa; color: #5f6368; }
     tr.row-click { cursor: pointer; }
     tr.row-click:hover { background: #e8f0fe; }
+
+    /* OVERLAY DE CARREGAMENTO GLOBAL */
+    #loading-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(255,255,255,0.55);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      pointer-events: none;
+    }
+    #loading-overlay .spinner-box {
+      background: #fff;
+      padding: 16px 22px;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #3c4043;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 3px solid #dadce0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
+
+  <!-- OVERLAY DE CARREGAMENTO -->
+  <div id="loading-overlay">
+    <div class="spinner-box">
+      <div class="spinner"></div>
+      <span>Carregando...</span>
+    </div>
+  </div>
 
   <!-- BARRA DE FILTROS SUPERIOR -->
   <div class="top-bar">
@@ -304,6 +347,23 @@
     var chartInstance = null;
     var clienteSelecionadoCod = null;
 
+    // Contador de requisições em andamento — usado pra saber quando
+    // esconder o overlay (evita esconder cedo demais se duas chamadas
+    // estiverem rodando ao mesmo tempo, como listaReps + listaClientes)
+    var requisicoesPendentes = 0;
+
+    function mostrarCarregando() {
+      requisicoesPendentes++;
+      document.getElementById('loading-overlay').style.display = 'flex';
+    }
+
+    function esconderCarregando() {
+      requisicoesPendentes = Math.max(0, requisicoesPendentes - 1);
+      if (requisicoesPendentes === 0) {
+        document.getElementById('loading-overlay').style.display = 'none';
+      }
+    }
+
     function fmtMoeda(v) {
       return "R$ " + Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
@@ -313,7 +373,10 @@
       Object.keys(params || {}).forEach(function(k) {
         if (params[k]) url += '&' + k + '=' + encodeURIComponent(params[k]);
       });
-      return fetch(url).then(function(res) { return res.json(); });
+      mostrarCarregando();
+      return fetch(url)
+        .then(function(res) { return res.json(); })
+        .finally(function() { esconderCarregando(); });
     }
 
     // Inicialização
