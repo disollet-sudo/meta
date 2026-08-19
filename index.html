@@ -76,6 +76,18 @@
       align-self: flex-end;
     }
     .btn-pendentes:hover { background: #fad2cf; }
+    .btn-inativos {
+      padding: 8px 14px;
+      background: #fef7e0;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      color: #b06000;
+      align-self: flex-end;
+    }
+    .btn-inativos:hover { background: #feefc3; }
 
     /* DASHBOARD LAYOUT GRID */
     .main-grid {
@@ -192,6 +204,7 @@
       align-items: center;
     }
     .modal-header.danger { background: #c5221f; }
+    .modal-header.warning { background: #e65100; }
     .modal-header h3 { margin: 0; font-size: 16px; }
     .modal-close {
       background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;
@@ -282,6 +295,7 @@
       </select>
     </div>
 
+    <button class="btn-inativos" onclick="abrirInativos()">⚠️ Inativos (80-90d)</button>
     <button class="btn-pendentes" onclick="abrirPendentes()">🔴 Ver Pendentes</button>
     <button class="btn-clear" onclick="limparFiltros()">Limpar Filtros</button>
   </div>
@@ -340,6 +354,19 @@
     </div>
   </div>
 
+  <!-- POPUP MODAL DE INATIVOS -->
+  <div class="modal-overlay" id="modal-inativos">
+    <div class="modal-card wide">
+      <div class="modal-header warning">
+        <h3>⚠️ Clientes Pre-Inativos (80 a 90 dias do Embarque)</h3>
+        <button class="modal-close" onclick="fecharInativos()">&times;</button>
+      </div>
+      <div class="modal-body" id="inativos-conteudo">
+        Carregando dados de inativação...
+      </div>
+    </div>
+  </div>
+
   <script>
     var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwAz0zQk7pBXqGu5_KBRtVs8QafQI4F0VGLHmfcH2TAMgBJtV8pQvZTusfLFSx_c89OIQ/exec";
     var MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -347,9 +374,7 @@
     var chartInstance = null;
     var clienteSelecionadoCod = null;
 
-    // Contador de requisições em andamento — usado pra saber quando
-    // esconder o overlay (evita esconder cedo demais se duas chamadas
-    // estiverem rodando ao mesmo tempo, como listaReps + listaClientes)
+    // Contador de requisições em andamento
     var requisicoesPendentes = 0;
 
     function mostrarCarregando() {
@@ -581,6 +606,53 @@
 
     function fecharPendentesEAbrirCliente(cod) {
       fecharPendentes();
+      abrirModal(cod);
+    }
+
+    // Modal de Clientes Pre-Inativos (80 a 90 dias do Embarque)
+    function abrirInativos() {
+      document.getElementById('modal-inativos').style.display = 'flex';
+      document.getElementById('inativos-conteudo').innerHTML = "Carregando clientes pré-inativos...";
+
+      var rep = document.getElementById('seletor-rep').value;
+
+      chamarApi('clientesInativos', { rep: rep, cod: clienteSelecionadoCod }).then(function(res) {
+        var html = '<div class="stats-grid cols-3">' +
+          '<div class="stat-box"><span>Qtd. Pre-Inativos</span><b>' + res.qtdInativos + '</b></div>' +
+          '<div class="stat-box"><span>Faixa Alerta</span><b>80 a 90 dias de embarque</b></div>' +
+          '<div class="stat-box"><span>Ordenado por</span><b>Mais próximo de inativar</b></div>' +
+          '</div>';
+
+        html += '<table><thead><tr><th>Cliente</th><th>Rep</th><th>Últ. Pedido</th><th>Data Embarque</th><th>Dias Embarcado</th><th>Status</th></tr></thead><tbody>';
+
+        if (res.inativos.length === 0) {
+          html += '<tr><td colspan="6" style="text-align:center; color:#999;">Nenhum cliente na faixa de 80 a 90 dias de embarque 🎉</td></tr>';
+        }
+
+        res.inativos.forEach(function(p) {
+          var badgeColor = p.diasEmbarque >= 87 ? '#c5221f' : '#b06000';
+          var txtStatus = p.diasParaInativar === 0 ? 'Inativa HOJE' : 'Inativa em ' + p.diasParaInativar + ' dia(s)';
+          html += '<tr class="row-click" onclick="fecharInativosEAbrirCliente(\'' + p.cod_cliente + '\')">' +
+            '<td>' + p.nome + '</td>' +
+            '<td>' + p.rep + '</td>' +
+            '<td>' + p.num_pedido + '</td>' +
+            '<td>' + p.dataEmbarque + '</td>' +
+            '<td><b>' + p.diasEmbarque + ' dias</b></td>' +
+            '<td><span style="color:' + badgeColor + '; font-weight:700;">' + txtStatus + '</span></td>' +
+            '</tr>';
+        });
+
+        html += '</tbody></table>';
+        document.getElementById('inativos-conteudo').innerHTML = html;
+      });
+    }
+
+    function fecharInativos() {
+      document.getElementById('modal-inativos').style.display = 'none';
+    }
+
+    function fecharInativosEAbrirCliente(cod) {
+      fecharInativos();
       abrirModal(cod);
     }
   </script>
