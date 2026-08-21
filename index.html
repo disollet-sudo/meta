@@ -3,36 +3,117 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Painel Principal - Metas & Repic</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>Painel Metas & Repic</title>
+  
+  <!-- Chart.js para os gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   
   <!-- Estilos CSS -->
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
 
-  <!-- Estrutura Principal do Painel -->
-  <div id="app">
-    <header>
-      <h1>Painel Principal - Metas & Repic</h1>
-      <button id="btnSincronizar" onclick="carregarDados()">Sincronizar</button>
-      <span id="status">Aguardando sincronização...</span>
-    </header>
-
-    <!-- Área de Busca -->
-    <section id="secao-busca"></section>
-
-    <!-- Área dos Gráficos -->
-    <section id="secao-graficos"></section>
-
-    <!-- Container dos Modais -->
-    <div id="container-modais"></div>
+  <!-- OVERLAY DE CARREGAMENTO -->
+  <div id="loading-overlay">
+    <div class="spinner-box">
+      <div class="spinner"></div>
+      <span id="loading-texto">Carregando...</span>
+    </div>
   </div>
 
-  <!-- Scripts JavaScript (Módulos do Sistema) -->
+  <!-- BARRA DE FILTROS SUPERIOR -->
+  <div class="top-bar">
+    <h1>📊 Previsão & Metas Mensais</h1>
+
+    <div class="field-group busca-wrap">
+      <label for="busca-cliente">Pesquisar Cliente:</label>
+      <input type="text" id="busca-cliente" placeholder="Digite nome ou código..." autocomplete="off">
+      <div class="autocomplete-lista" id="lista-clientes"></div>
+    </div>
+
+    <div class="field-group busca-wrap">
+      <label for="busca-rep">Representante:</label>
+      <input type="text" id="busca-rep" placeholder="Todos os Representantes" autocomplete="off">
+      <div class="autocomplete-lista" id="lista-reps"></div>
+    </div>
+
+    <button class="btn-inativos" onclick="abrirInativos()">⚠️ Inativos</button>
+    <button class="btn-pendentes" onclick="abrirPendentes()">🔴 Ver Pendentes</button>
+    <button class="btn-clear" onclick="limparFiltros()">Limpar Filtros</button>
+    <button class="btn-sync" id="btn-sync" onclick="sincronizarDados()">🔄 Sincronizar</button>
+  </div>
+
+  <div class="sync-status" id="sync-status">Sincronizando pela primeira vez...</div>
+
+  <!-- CONTEÚDO PRINCIPAL (GRÁFICO + PAINEL LATERAL) -->
+  <div class="main-grid">
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <h2 id="titulo-grafico">Desempenho Geral por Mês</h2>
+        <span style="font-size: 12px; color: #5f6368;">Clique em uma barra para detalhar</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="grafico-principal"></canvas>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="side-header">
+        <h3 id="titulo-side">Selecione um mês no gráfico</h3>
+      </div>
+      <div class="side-content" id="conteudo-side">
+        <p style="color: #5f6368; font-size: 13px; text-align: center; margin-top: 40px;">
+          Clique em qualquer barra do mês para ver quem comprou e quem deveria comprar.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- POPUP MODAL DO CLIENTE -->
+  <div class="modal-overlay" id="modal-cliente">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-nome-cliente">Detalhes do Cliente</h3>
+        <button class="modal-close" onclick="fecharModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-conteudo">Carregando histórico...</div>
+    </div>
+  </div>
+
+  <!-- POPUP MODAL DE PENDENTES -->
+  <div class="modal-overlay" id="modal-pendentes">
+    <div class="modal-card wide">
+      <div class="modal-header danger">
+        <h3>🔴 Clientes Pendentes (data atual para trás)</h3>
+        <button class="modal-close" onclick="fecharPendentes()">&times;</button>
+      </div>
+      <div class="modal-body" id="pendentes-conteudo">Carregando pendências...</div>
+    </div>
+  </div>
+
+  <!-- POPUP MODAL DE INATIVOS -->
+  <div class="modal-overlay" id="modal-inativos">
+    <div class="modal-card wide">
+      <div class="modal-header warning">
+        <h3>⚠️ Clientes Inativos / Pre-Inativos (a partir de 80 dias do Embarque)</h3>
+        <button class="modal-close" onclick="fecharInativos()">&times;</button>
+      </div>
+      <div class="modal-body" id="inativos-conteudo">Carregando dados de inativação...</div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS DO SISTEMA -->
   <script src="dadosapp.js"></script>
   <script src="busca.js"></script>
   <script src="graficos.js"></script>
   <script src="modais.js"></script>
+
+  <script>
+    window.onload = function () {
+      sincronizarDados();
+    };
+  </script>
 </body>
 </html>
