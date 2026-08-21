@@ -2,22 +2,21 @@
 var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyOKblsyMmK_6OIXSZc0eSAwWapd0QdnF0KWnNydhpLV4VOAK3Z7fgkw6qUp2ujNDj2Ew/exec";
 
 // ============================================================
-// ESTADO DA APLICAÇÃO — carregado uma vez, tudo mais filtra em memória
+// ESTADO DA APLICAÇÃO
 // ============================================================
 var Store = {
   pedidos: [],
-  representantes: {},        // cod -> nome
-  embarquesPorPedido: {},    // num_pedido -> Date
-  embarquesPorNome: {},      // nome normalizado -> Date
-  repicPorCliente: {},       // computado no navegador
-  clientes: {},              // cod -> {cod, nome, rep}
+  representantes: {},
+  embarquesPorPedido: {},
+  embarquesPorNome: {},
+  repicPorCliente: {},
+  clientes: {},
   carregado: false,
   ultimaSincronizacao: null
 };
 
 var filtroClienteCod = null;
 var filtroRepCod = "TODOS";
-
 var requisicoesPendentes = 0;
 
 function mostrarCarregando(msg) {
@@ -38,6 +37,7 @@ function fmtMoeda(v) {
 }
 
 function formatarData(d) {
+  if (!d || isNaN(d.getTime())) return '—';
   return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
 }
 
@@ -55,7 +55,7 @@ function normalizarNome(nome) {
 }
 
 // ============================================================
-// SINCRONIZAÇÃO VIA FETCH (API HTTP)
+// SINCRONIZAÇÃO VIA FETCH
 // ============================================================
 function sincronizarDados() {
   mostrarCarregando('Sincronizando com a planilha...');
@@ -63,7 +63,7 @@ function sincronizarDados() {
 
   fetch(WEB_APP_URL)
     .then(function (response) {
-      if (!response.ok) throw new Error('Erro na requisição: ' + response.statusText);
+      if (!response.ok) throw new Error('Erro na requisição HTTP: ' + response.status);
       return response.json();
     })
     .then(function (pacote) {
@@ -80,16 +80,39 @@ function sincronizarDados() {
 }
 
 function processarPacote(pacote) {
-  // Converte as strings de data vindas do JSON de volta para objetos Date
+  if (!pacote) {
+    alert("Nenhum dado recebido do servidor.");
+    return;
+  }
+  
+  if (pacote.erro) {
+    alert("Erro no servidor Apps Script:\n" + pacote.erro);
+    document.getElementById('sync-status').textContent = 'Erro: ' + pacote.erro;
+    return;
+  }
+
+  // Converte datas em texto (DD/MM/AAAA ou ISO) para objeto Date
+  function tratarData(dStr) {
+    if (!dStr) return new Date();
+    if (dStr instanceof Date) return dStr;
+    if (typeof dStr === 'string' && dStr.includes('/')) {
+      var partes = dStr.split('/');
+      if (partes.length === 3) return new Date(partes[2], partes[1] - 1, partes[0]);
+    }
+    var dt = new Date(dStr);
+    return isNaN(dt.getTime()) ? new Date() : dt;
+  }
+
   Store.pedidos = (pacote.pedidos || []).map(function (p) {
-    p.data = new Date(p.data);
+    p.data = tratarData(p.data);
+    p.valor = Number(p.valor || 0);
     return p;
   });
 
   Store.representantes = pacote.representantes || {};
   Store.embarquesPorPedido = pacote.embarquesPorPedido || {};
   Store.embarquesPorNome = pacote.embarquesPorNome || {};
-  Store.ultimaSincronizacao = pacote.geradoEm ? new Date(pacote.geradoEm) : new Date();
+  Store.ultimaSincronizacao = pacote.geradoEm ? tratarData(pacote.geradoEm) : new Date();
   Store.carregado = true;
 
   Store.repicPorCliente = calcularRepicEmMemoria(Store.pedidos);
@@ -143,12 +166,9 @@ function calcularRepicEmMemoria(pedidos) {
       intervalos.push((eventos[i].data - eventos[i - 1].data) / 86400000);
     }
 
-    var repicMedio;
-    if (intervalos.length > 0) {
-      repicMedio = intervalos.reduce(function (s, d) { return s + d; }, 0) / intervalos.length;
-    } else {
-      repicMedio = 100;
-    }
+    var repicMedio = intervalos.length > 0
+      ? intervalos.reduce(function (s, d) { return s + d; }, 0) / intervalos.length
+      : 100;
 
     repicPorCliente[cod] = {
       cod_cliente: cod,
