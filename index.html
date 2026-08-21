@@ -1,14 +1,37 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Painel Metas & Repic</title>
-  <meta http-equiv="refresh" content="0; url=https://script.google.com/macros/s/AKfycbxs8_zPMwaQ0mWzuJOueYHEFD2Q4Sw4wW513AGXGxhpqkwZAAXbcW0-kY1G34DZVq9p5A/exec">
-  <script>
-    window.location.replace("https://script.google.com/macros/s/AKfycbxs8_zPMwaQ0mWzuJOueYHEFD2Q4Sw4wW513AGXGxhpqkwZAAXbcW0-kY1G34DZVq9p5A/exec");
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Principal - Metas & Repic</title>
+  
+  <!-- Estilos CSS -->
+  <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
-  <p>Redirecionando para o painel... <a href="https://script.google.com/macros/s/AKfycbxs8_zPMwaQ0mWzuJOueYHEFD2Q4Sw4wW513AGXGxhpqkwZAAXbcW0-kY1G34DZVq9p5A/exec">clique aqui</a> se não for automático.</p>
+
+  <!-- Estrutura Principal do Painel -->
+  <div id="app">
+    <header>
+      <h1>Painel Principal - Metas & Repic</h1>
+      <button id="btnSincronizar" onclick="carregarDados()">Sincronizar</button>
+      <span id="status">Aguardando sincronização...</span>
+    </header>
+
+    <!-- Área de Busca -->
+    <section id="secao-busca"></section>
+
+    <!-- Área dos Gráficos -->
+    <section id="secao-graficos"></section>
+
+    <!-- Container dos Modais -->
+    <div id="container-modais"></div>
+  </div>
+
+  <!-- Scripts JavaScript (Módulos do Sistema) -->
+  <script src="dadosapp.js"></script>
+  <script src="busca.js"></script>
+  <script src="graficos.js"></script>
+  <script src="modais.js"></script>
 </body>
 </html>
