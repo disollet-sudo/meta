@@ -1,0 +1,98 @@
+<script>
+  function montarListasBusca() {
+    // Representantes: usa a aba "representantes", mas garante que um
+    // cod_rep que apareça em Pedidos sem estar cadastrado também apareça
+    // na busca (fallback "Rep <cod>"), pro filtro não "sumir" com ninguém.
+    var repsArray = Object.keys(Store.representantes).map(function (cod) {
+      return { cod: cod, nome: Store.representantes[cod] };
+    });
+    Object.keys(Store.clientes).forEach(function (codCli) {
+      var codRep = Store.clientes[codCli].rep;
+      if (codRep && !Store.representantes[codRep] && !repsArray.some(function (r) { return r.cod === codRep; })) {
+        repsArray.push({ cod: codRep, nome: 'Rep ' + codRep });
+      }
+    });
+    repsArray.sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+
+    var clientesArray = Object.keys(Store.clientes).map(function (cod) { return Store.clientes[cod]; })
+      .sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+
+    criarAutocomplete('busca-rep', 'lista-reps', repsArray.map(function (r) {
+      return { valor: r.cod, texto: r.cod + ' - ' + r.nome };
+    }), function (item) {
+      filtroRepCod = item ? item.valor : "TODOS";
+      document.getElementById('busca-rep').value = item ? item.texto : '';
+      carregarGraficoMain();
+    });
+
+    criarAutocomplete('busca-cliente', 'lista-clientes', clientesArray.map(function (c) {
+      return { valor: c.cod, texto: c.cod + ' - ' + c.nome };
+    }), function (item) {
+      filtroClienteCod = item ? item.valor : null;
+      document.getElementById('busca-cliente').value = item ? item.texto : '';
+      document.getElementById('titulo-grafico').textContent = item
+        ? ("Histórico & Previsão: " + item.texto.split(' - ').slice(1).join(' - '))
+        : "Desempenho Geral por Mês";
+      carregarGraficoMain();
+    });
+  }
+
+  // Autocomplete simples e reutilizável: filtra por substring
+  // (sem diferenciar maiúscula/minúscula nem acento)
+  function criarAutocomplete(inputId, listaId, itens, aoSelecionar) {
+    var input = document.getElementById(inputId);
+    var lista = document.getElementById(listaId);
+
+    input.oninput = function () {
+      var termo = normalizarNome(input.value);
+      lista.innerHTML = '';
+
+      if (!termo) {
+        lista.style.display = 'none';
+        return;
+      }
+
+      var filtrados = itens.filter(function (it) {
+        return normalizarNome(it.texto).indexOf(termo) !== -1;
+      }).slice(0, 30);
+
+      if (filtrados.length === 0) {
+        lista.style.display = 'none';
+        return;
+      }
+
+      filtrados.forEach(function (it) {
+        var div = document.createElement('div');
+        div.className = 'autocomplete-item';
+        div.textContent = it.texto;
+        div.onmousedown = function () {
+          aoSelecionar(it);
+          lista.style.display = 'none';
+        };
+        lista.appendChild(div);
+      });
+      lista.style.display = 'block';
+    };
+
+    input.onblur = function () {
+      setTimeout(function () { lista.style.display = 'none'; }, 150);
+    };
+
+    input.onkeydown = function (e) {
+      if (e.key === 'Escape') {
+        input.value = '';
+        aoSelecionar(null);
+        lista.style.display = 'none';
+      }
+    };
+  }
+
+  function limparFiltros() {
+    document.getElementById('busca-cliente').value = "";
+    document.getElementById('busca-rep').value = "";
+    filtroClienteCod = null;
+    filtroRepCod = "TODOS";
+    document.getElementById('titulo-grafico').textContent = "Desempenho Geral por Mês";
+    carregarGraficoMain();
+  }
+</script>
