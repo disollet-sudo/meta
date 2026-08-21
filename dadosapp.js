@@ -1,5 +1,5 @@
 // COLOQUE AQUI A URL DO SEU WEB APP DO GOOGLE APPS SCRIPT
-var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz8K7ZGhZeQTXgg3D-dojFb8DBXLca6Oe9q6pzGlYXtqpWuWFmZrdpeOHmnJrIzptSunQ/exec";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyOKblsyMmK_6OIXSZc0eSAwWapd0QdnF0KWnNydhpLV4VOAK3Z7fgkw6qUp2ujNDj2Ew/exec";
 
 // ============================================================
 // ESTADO DA APLICAÇÃO — carregado uma vez, tudo mais filtra em memória
