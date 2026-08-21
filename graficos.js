@@ -1,0 +1,147 @@
+// ============================================================
+// GRAFICOS.JS - LÓGICA E RENDERIZAÇÃO DOS GRÁFICOS
+// ============================================================
+
+var MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+var chartInstance = null;
+
+function getPedidosFiltrados() {
+  return Store.pedidos.filter(function (p) {
+    if (filtroClienteCod && String(p.cod_cliente) !== String(filtroClienteCod)) return false;
+    if (filtroRepCod && filtroRepCod !== "TODOS" && String(p.cod_rep) !== String(filtroRepCod)) return false;
+    return true;
+  });
+}
+
+function getClientesEnvolvidos(pedidosFiltrados) {
+  var cods = {};
+  pedidosFiltrados.forEach(function (p) { cods[p.cod_cliente] = true; });
+  return Object.keys(cods);
+}
+
+function calcularGraficoMensal() {
+  var anoAtual = new Date().getFullYear();
+  var pedidosFiltrados = getPedidosFiltrados();
+  var codsClientes = getClientesEnvolvidos(pedidosFiltrados);
+
+  var meses = [];
+  for (var m = 1; m <= 12; m++) meses.push({ mes: m, meta: 0, realizado: 0 });
+
+  codsClientes.forEach(function (codCliente) {
+    var infoRepic = Store.repicPorCliente[codCliente];
+    if (!infoRepic) return;
+
+    pedidosFiltrados.forEach(function (p) {
+      if (String(p.cod_cliente) === String(codCliente) && p.data.getFullYear() === anoAtual) {
+        meses[p.data.getMonth()].realizado += p.valor;
+      }
+    });
+
+    var projecoes = calcularProjecoesDoCliente(infoRepic, anoAtual);
+    projecoes.forEach(function (proj) {
+      meses[proj.mes - 1].meta += proj.ticketMedio;
+    });
+  });
+
+  return meses.map(function (m) {
+    return {
+      mes: m.mes,
+      meta: Math.round(m.meta * 100) / 100,
+      realizado: Math.round(m.realizado * 100) / 100
+    };
+  });
+}
+
+function carregarGraficoMain() {
+  if (!Store.carregado) return;
+
+  var dados = calcularGraficoMensal();
+  var ctx = document.getElementById('grafico-principal').getContext('2d');
+
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: MESES,
+      datasets: [
+        { label: 'Realizado (R$)', data: dados.map(function (d) { return d.realizado; }), backgroundColor: '#1e8e3e' },
+        { label: 'Meta / Projeção (R$)', data: dados.map(function (d) { return d.meta; }), backgroundColor: '#1a73e8' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: function (e, elements) {
+        if (elements.length > 0) {
+          carregarDetalhesMes(elements[0].index + 1);
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: function (v) { return fmtMoeda(v); } } }
+      }
+    }
+  });
+}
+
+function carregarDetalhesMes(mesNum) {
+  document.getElementById('titulo-side').textContent = "Mês: " + MESES[mesNum - 1];
+
+  var anoAtual = new Date().getFullYear();
+  var pedidosFiltrados = getPedidosFiltrados();
+  var codsClientes = getClientesEnvolvidos(pedidosFiltrados);
+
+  var comprou = [];
+  var deveriaComprar = [];
+
+  codsClientes.forEach(function (codCliente) {
+    var infoRepic = Store.repicPorCliente[codCliente];
+    if (!infoRepic) return;
+
+    var ultimoEvento = infoRepic.eventos[infoRepic.eventos.length - 1];
+
+    var comprasNoMes = pedidosFiltrados.filter(function (p) {
+      return String(p.cod_cliente) === String(codCliente) && p.data.getFullYear() === anoAtual && (p.data.getMonth() + 1) === mesNum;
+    });
+
+    if (comprasNoMes.length > 0) {
+      var totalComprado = comprasNoMes.reduce(function (s, p) { return s + p.valor; }, 0);
+      comprou.push({
+        cod_cliente: codCliente, nome: ultimoEvento.nome, rep: ultimoEvento.rep,
+        valor: Math.round(totalComprado * 100) / 100, qtdPedidos: comprasNoMes.length
+      });
+    }
+
+    var projecoes = calcularProjecoesDoCliente(infoRepic, anoAtual);
+    projecoes.forEach(function (proj) {
+      if (proj.mes === mesNum) {
+        deveriaComprar.push({
+          cod_cliente: codCliente, nome: ultimoEvento.nome, rep: ultimoEvento.rep,
+          dataPrevista: proj.dataPrevista, valorEsperado: Math.round(proj.ticketMedio * 100) / 100,
+          status: proj.comprouNoMes ? "Comprou" : "Não comprou"
+        });
+      }
+    });
+  });
+
+  var html = '';
+  html += '<div><div class="section-title badge-comprou"><span>🟢 Comprou no Mês</span><span>' + comprou.length + '</span></div>';
+  if (comprou.length === 0) html += '<p style="font-size:12px; color:#999;">Nenhuma compra realizada.</p>';
+  comprou.forEach(function (c) {
+    html += '<div class="client-item" onclick="abrirModal(\'' + c.cod_cliente + '\')">' +
+      '<div class="name">' + c.nome + '</div>' +
+      '<div class="sub"><span>Vendido: ' + fmtMoeda(c.valor) + '</span><span>Rep: ' + c.rep + '</span></div></div>';
+  });
+  html += '</div>';
+
+  html += '<div><div class="section-title badge-previsto"><span>🔵 Previsto no Mês</span><span>' + deveriaComprar.length + '</span></div>';
+  if (deveriaComprar.length === 0) html += '<p style="font-size:12px; color:#999;">Sem previsões diretas.</p>';
+  deveriaComprar.forEach(function (c) {
+    html += '<div class="client-item" onclick="abrirModal(\'' + c.cod_cliente + '\')">' +
+      '<div class="name">' + c.nome + '</div>' +
+      '<div class="sub"><span>Previsto: ' + c.dataPrevista + '</span><span>' + fmtMoeda(c.valorEsperado) + '</span></div></div>';
+  });
+  html += '</div>';
+
+  document.getElementById('conteudo-side').innerHTML = html;
+}
