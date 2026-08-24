@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel Metas & Repic</title>
-  
+
   <!-- Chart.js para os gráficos -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-  
+
   <!-- Estilos CSS -->
   <link rel="stylesheet" href="estilos.css">
 </head>
@@ -21,52 +21,119 @@
     </div>
   </div>
 
-  <!-- BARRA DE FILTROS SUPERIOR -->
-  <div class="top-bar">
-    <h1>📊 Previsão & Metas Mensais</h1>
-
-    <div class="field-group busca-wrap">
-      <label for="busca-cliente">Pesquisar Cliente:</label>
-      <input type="text" id="busca-cliente" placeholder="Digite nome ou código..." autocomplete="off">
-      <div class="autocomplete-lista" id="lista-clientes"></div>
-    </div>
-
-    <div class="field-group busca-wrap">
-      <label for="busca-rep">Representante:</label>
-      <input type="text" id="busca-rep" placeholder="Todos os Representantes" autocomplete="off">
-      <div class="autocomplete-lista" id="lista-reps"></div>
-    </div>
-
-    <button class="btn-inativos" onclick="abrirInativos()">⚠️ Inativos</button>
-    <button class="btn-pendentes" onclick="abrirPendentes()">🔴 Ver Pendentes</button>
-    <button class="btn-clear" onclick="limparFiltros()">Limpar Filtros</button>
+  <!-- NAVEGAÇÃO ENTRE TELAS -->
+  <div class="top-nav">
+    <button id="nav-painel" class="active" onclick="irParaPainel()">📊 Painel</button>
+    <button id="nav-comissoes" onclick="irParaComissoes()">💰 Comissões</button>
     <button class="btn-sync" id="btn-sync" onclick="sincronizarDados()">🔄 Sincronizar</button>
   </div>
-
   <div class="sync-status" id="sync-status">Sincronizando pela primeira vez...</div>
 
-  <!-- CONTEÚDO PRINCIPAL (GRÁFICO + PAINEL LATERAL) -->
-  <div class="main-grid">
+  <!-- ============================================================ -->
+  <!-- TELA 1: PAINEL (dashboard original)                          -->
+  <!-- ============================================================ -->
+  <div id="tela-painel">
 
-    <div class="chart-card">
-      <div class="chart-header">
-        <h2 id="titulo-grafico">Desempenho Geral por Mês</h2>
-        <span style="font-size: 12px; color: #5f6368;">Clique em uma barra para detalhar</span>
+    <!-- BARRA DE FILTROS SUPERIOR -->
+    <div class="top-bar">
+      <h1>📊 Previsão & Metas Mensais</h1>
+
+      <div class="field-group busca-wrap">
+        <label for="busca-cliente">Pesquisar Cliente:</label>
+        <input type="text" id="busca-cliente" placeholder="Digite nome ou código..." autocomplete="off">
+        <div class="autocomplete-lista" id="lista-clientes"></div>
       </div>
-      <div class="chart-container">
-        <canvas id="grafico-principal"></canvas>
+
+      <div class="field-group busca-wrap">
+        <label for="busca-rep">Representante:</label>
+        <input type="text" id="busca-rep" placeholder="Todos os Representantes" autocomplete="off">
+        <div class="autocomplete-lista" id="lista-reps"></div>
+      </div>
+
+      <button class="btn-inativos" onclick="abrirInativos()">⚠️ Inativos</button>
+      <button class="btn-pendentes" onclick="abrirPendentes()">🔴 Ver Pendentes</button>
+      <button class="btn-clear" onclick="limparFiltros()">Limpar Filtros</button>
+    </div>
+
+    <!-- CONTEÚDO PRINCIPAL (GRÁFICO + PAINEL LATERAL) -->
+    <div class="main-grid">
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <h2 id="titulo-grafico">Desempenho Geral por Mês</h2>
+          <span style="font-size: 12px; color: #5f6368;">Clique em uma barra para detalhar</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="grafico-principal"></canvas>
+        </div>
+      </div>
+
+      <div class="side-panel">
+        <div class="side-header">
+          <h3 id="titulo-side">Selecione um mês no gráfico</h3>
+        </div>
+        <div class="side-content" id="conteudo-side">
+          <p style="color: #5f6368; font-size: 13px; text-align: center; margin-top: 40px;">
+            Clique em qualquer barra do mês para ver quem comprou e quem deveria comprar.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TELA 2: COMISSÕES                                             -->
+  <!-- ============================================================ -->
+  <div id="tela-comissoes" style="display: none;">
+
+    <div class="top-bar">
+      <h1>💰 Comissões</h1>
+
+      <div class="field-group busca-wrap">
+        <label for="busca-rep-comissao">Representante:</label>
+        <input type="text" id="busca-rep-comissao" placeholder="Todos os Representantes" autocomplete="off">
+        <div class="autocomplete-lista" id="lista-reps-comissao"></div>
+      </div>
+
+      <div class="field-group busca-wrap">
+        <label for="busca-cliente-comissao">Cliente:</label>
+        <input type="text" id="busca-cliente-comissao" placeholder="Todos os Clientes" autocomplete="off">
+        <div class="autocomplete-lista" id="lista-clientes-comissao"></div>
+      </div>
+
+      <button class="btn-clear" onclick="limparFiltrosComissao()">Limpar Filtros</button>
+    </div>
+
+    <!-- CHIPS DE STATUS E PERÍODO (tudo clicável) -->
+    <div class="chips-bar">
+      <div class="chips-grupo">
+        <span class="chips-label">Status:</span>
+        <button id="chip-status-todos" class="chip-status active" onclick="setStatusComissao('TODOS', this)">Todos</button>
+        <button class="chip-status" onclick="setStatusComissao('PEDIDO FATURADO', this)">Faturado</button>
+        <button class="chip-status" onclick="setStatusComissao('LIBERADO PARA FATURAMENTO', this)">Liberado</button>
+      </div>
+      <div class="chips-grupo">
+        <span class="chips-label">Período:</span>
+        <button id="chip-periodo-todos" class="chip-periodo active" onclick="setPeriodoComissao('TODOS', this)">Tudo</button>
+        <button class="chip-periodo" onclick="setPeriodoComissao('MES', this)">Este mês</button>
+        <button class="chip-periodo" onclick="setPeriodoComissao('MES_PASSADO', this)">Mês passado</button>
+        <button class="chip-periodo" onclick="setPeriodoComissao('3MESES', this)">Últimos 3 meses</button>
+        <button class="chip-periodo" onclick="setPeriodoComissao('ANO', this)">Este ano</button>
+      </div>
+      <div class="chips-grupo toggle-visao">
+        <span class="chips-label">Ver:</span>
+        <button class="active" onclick="alternarVisaoComissao('REP', this)">Por Representante</button>
+        <button onclick="alternarVisaoComissao('PEDIDOS', this)">Todos os Pedidos</button>
       </div>
     </div>
 
-    <div class="side-panel">
-      <div class="side-header">
-        <h3 id="titulo-side">Selecione um mês no gráfico</h3>
-      </div>
-      <div class="side-content" id="conteudo-side">
-        <p style="color: #5f6368; font-size: 13px; text-align: center; margin-top: 40px;">
-          Clique em qualquer barra do mês para ver quem comprou e quem deveria comprar.
-        </p>
-      </div>
+    <!-- CARDS DE RESUMO -->
+    <div class="stats-grid cols-4" id="cards-comissao"></div>
+
+    <!-- TABELA (coletivo ou individual, conforme o toggle) -->
+    <div class="chart-card">
+      <div id="tabela-comissoes"></div>
     </div>
 
   </div>
@@ -104,11 +171,27 @@
     </div>
   </div>
 
+  <!-- POPUP MODAL DO REPRESENTANTE (detalhe individual de comissão) -->
+  <div class="modal-overlay" id="modal-representante">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 id="modal-nome-rep">Detalhes do Representante</h3>
+        <button class="modal-close" onclick="fecharModalRepresentante()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="busca-pedido-rep-modal" placeholder="Buscar por cliente ou número do pedido..."
+               oninput="renderizarModalRepresentante()" style="width: 100%; margin-bottom: 12px;">
+        <div id="modal-rep-conteudo">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- SCRIPTS DO SISTEMA -->
   <script src="dadosapp.js"></script>
   <script src="busca.js"></script>
   <script src="graficos.js"></script>
   <script src="modais.js"></script>
+  <script src="comissoes.js"></script>
 
   <script>
     window.onload = function () {
