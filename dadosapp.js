@@ -1,5 +1,5 @@
 // COLOQUE AQUI A URL DO SEU WEB APP DO GOOGLE APPS SCRIPT
-var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbztKuKgNa0zcukXRn0oJotlFQtcRiq4zLVnuJSopAefJ08dxI79LMIzUL6-XjJ1r577MQ/exec";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwL2bIGte6dsqUpqX2W5EDQJMZDiai9Z7ced8o_Jd9kXXw3sF9Dwj_xU2JXG6TrUfUKPg/exec";
 
 // ============================================================
 // ESTADO DA APLICAÇÃO
@@ -84,7 +84,7 @@ function processarPacote(pacote) {
     alert("Nenhum dado recebido do servidor.");
     return;
   }
-  
+
   if (pacote.erro) {
     alert("Erro no servidor Apps Script:\n" + pacote.erro);
     document.getElementById('sync-status').textContent = 'Erro: ' + pacote.erro;
@@ -110,8 +110,19 @@ function processarPacote(pacote) {
   });
 
   Store.representantes = pacote.representantes || {};
-  Store.embarquesPorPedido = pacote.embarquesPorPedido || {};
-  Store.embarquesPorNome = pacote.embarquesPorNome || {};
+
+  // embarquesPorPedido/Nome chegam como { chave: "2026-08-10T..." } (string, via JSON).
+  // Precisam virar Date de verdade, senão modais.js quebra em .getTime().
+  Store.embarquesPorPedido = {};
+  Object.keys(pacote.embarquesPorPedido || {}).forEach(function (k) {
+    Store.embarquesPorPedido[k] = tratarData(pacote.embarquesPorPedido[k]);
+  });
+
+  Store.embarquesPorNome = {};
+  Object.keys(pacote.embarquesPorNome || {}).forEach(function (k) {
+    Store.embarquesPorNome[k] = tratarData(pacote.embarquesPorNome[k]);
+  });
+
   Store.ultimaSincronizacao = pacote.geradoEm ? tratarData(pacote.geradoEm) : new Date();
   Store.carregado = true;
 
@@ -166,9 +177,13 @@ function calcularRepicEmMemoria(pedidos) {
       intervalos.push((eventos[i].data - eventos[i - 1].data) / 86400000);
     }
 
+    // Sem intervalos (cliente com uma única compra) = sem dado confiável.
+    // Antes chutava 100 dias fixos; agora fica null, e quem consome esse
+    // valor (abrirPendentes, calcularProjecoesDoCliente) já trata null
+    // caindo no próprio fallback de 365 dias.
     var repicMedio = intervalos.length > 0
       ? intervalos.reduce(function (s, d) { return s + d; }, 0) / intervalos.length
-      : 100;
+      : null;
 
     repicPorCliente[cod] = {
       cod_cliente: cod,
