@@ -1,5 +1,5 @@
 // COLOQUE AQUI A URL DO SEU WEB APP DO GOOGLE APPS SCRIPT
-var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyg76a9_YouioNpYIliFtHD_S73h2h710zFjDsWY4z-idqFlbz5gNMTYc5FRZc-Gm1BPA/exec";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwLhV2RZBSznyP8I4tXahT5vZdqy4wYW3E5571DDHzNPBSfngRDdZzmZJC0_J4jrc-UKw/exec";
 
 // ============================================================
 // ESTADO DA APLICAÇÃO
@@ -13,6 +13,8 @@ var Store = {
   repicPorCliente: {},
   clientes: {},
   carregado: false,
+  metas: [],
+  comissoesFixas: [],
   ultimaSincronizacao: null
 };
 var filtroClienteCod = null;
