@@ -1,5 +1,5 @@
 // COLOQUE AQUI A URL DO SEU WEB APP DO GOOGLE APPS SCRIPT
-var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwuqCQOPNVZUsTLYel5lYDZ8Bt75cLM8x6oOFIrC_eX345ckG5aSzaYAHLUasKs9rvb/exec";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyg76a9_YouioNpYIliFtHD_S73h2h710zFjDsWY4z-idqFlbz5gNMTYc5FRZc-Gm1BPA/exec";
 
 // ============================================================
 // ESTADO DA APLICAÇÃO
@@ -9,12 +9,12 @@ var Store = {
   representantes: {},
   embarquesPorPedido: {},
   embarquesPorNome: {},
+  comissoes: [],                 // <-- novo
   repicPorCliente: {},
   clientes: {},
   carregado: false,
   ultimaSincronizacao: null
 };
-
 var filtroClienteCod = null;
 var filtroRepCod = "TODOS";
 var requisicoesPendentes = 0;
