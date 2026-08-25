@@ -123,6 +123,14 @@ function processarPacote(pacote) {
     Store.embarquesPorNome[k] = tratarData(pacote.embarquesPorNome[k]);
   });
 
+  Store.comissoes = (pacote.comissoes || []).map(function (c) {
+    c.data = tratarData(c.data);
+    c.valor_total = Number(c.valor_total || 0);
+    c.percentual_comissao = Number(c.percentual_comissao || 0);
+    c.valor_comissao = Number(c.valor_comissao || 0);
+    return c;
+  });
+
   Store.ultimaSincronizacao = pacote.geradoEm ? tratarData(pacote.geradoEm) : new Date();
   Store.carregado = true;
 
@@ -138,8 +146,10 @@ function processarPacote(pacote) {
   document.getElementById('sync-status').textContent =
     'Última sincronização: ' + Store.ultimaSincronizacao.toLocaleString('pt-BR');
 
-  if (typeof montarListasBusca === 'function') montarListasBusca();
+if (typeof montarListasBusca === 'function') montarListasBusca();
   if (typeof carregarGraficoMain === 'function') carregarGraficoMain();
+  if (typeof montarListasBuscaComissao === 'function') montarListasBuscaComissao();
+  if (typeof renderizarComissoes === 'function') renderizarComissoes();
 }
 
 // ============================================================
