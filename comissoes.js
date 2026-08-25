@@ -397,32 +397,91 @@ function renderizarModalRepresentante() {
     '</div>';
 
   html += '<table><thead><tr>' +
-    '<th>Pedido</th><th>Data</th><th>Cliente</th><th>Valor</th><th>%</th><th>Comissão</th><th>Status</th><th>% Esperado (Meta)</th>' +
+    '<th>Pedido</th><th>Data</th><th>Cliente</th><th>Valor</th><th>%</th><th>Comissão</th><th>Status</th><th>% Esperado (Meta)</th><th>Ações</th>' +
     '</tr></thead><tbody>';
 
   if (pedidosRep.length === 0) {
-    html += '<tr><td colspan="8" style="text-align:center; color:#999;">Nenhum pedido encontrado.</td></tr>';
+    html += '<tr><td colspan="9" style="text-align:center; color:#999;">Nenhum pedido encontrado.</td></tr>';
   }
 
   pedidosRep.forEach(function (c) {
     var ano = c.data.getFullYear();
     var mes = c.data.getMonth() + 1;
     var percentualEsperado = calcularPercentualEsperado(modalRepCodAtual, ano, mes);
+    var pendente = c.alteracao_pendente ? ' <span title="Alteração aguardando sincronização">⏳</span>' : '';
 
     html += '<tr>' +
       '<td>' + c.num_pedido + '</td>' +
       '<td>' + formatarData(c.data) + '</td>' +
       '<td>' + c.nome_cliente + '</td>' +
       '<td>' + fmtMoeda(c.valor_total) + '</td>' +
-      '<td>' + c.percentual_comissao.toFixed(2) + '%</td>' +
+      '<td>' + c.percentual_comissao.toFixed(2) + '%' + pendente + '</td>' +
       '<td><b>' + fmtMoeda(c.valor_comissao) + '</b></td>' +
       '<td>' + c.status_pedido + '</td>' +
       '<td class="comissao-esperada-verde">' + (percentualEsperado !== null ? percentualEsperado.toFixed(2) + '%' : '—') + '</td>' +
+      '<td><button class="btn-editar-comissao" title="Editar comissão" ' +
+          'onclick="abrirModalEditarComissao(\'' + c.num_pedido + '\', ' + c.percentual_comissao + ', \'' + ano + '\')">✏️</button></td>' +
       '</tr>';
   });
 
   html += '</tbody></table>';
   document.getElementById('modal-rep-conteudo').innerHTML = html;
+}
+
+// ============================================================
+// EDIÇÃO DE COMISSÃO POR PEDIDO
+// ============================================================
+var pedidoEditandoComissao = null;
+
+function abrirModalEditarComissao(numPedido, percentualAtual, anoPedido) {
+  pedidoEditandoComissao = { num_pedido: numPedido, percentual_anterior: percentualAtual, ano: anoPedido };
+  document.getElementById('modal-editar-comissao-titulo').textContent = 'Editar Comissão — Pedido ' + numPedido;
+  document.getElementById('editar-comissao-atual').value = percentualAtual.toFixed(2) + '%';
+  document.getElementById('editar-comissao-input').value = percentualAtual;
+  document.getElementById('modal-editar-comissao').style.display = 'flex';
+}
+
+function fecharModalEditarComissao() {
+  document.getElementById('modal-editar-comissao').style.display = 'none';
+  pedidoEditandoComissao = null;
+}
+
+function salvarComissaoPedido() {
+  if (!pedidoEditandoComissao) return;
+
+  var novoPercentual = Number(document.getElementById('editar-comissao-input').value);
+  if (isNaN(novoPercentual) || novoPercentual < 0 || novoPercentual > 100) {
+    alert('Informe um percentual válido entre 0 e 100.');
+    return;
+  }
+
+  var payload = {
+    acao: 'solicitar_alteracao_comissao',
+    num_pedido: pedidoEditandoComissao.num_pedido,
+    ano_pedido: pedidoEditandoComissao.ano,
+    percentual_anterior: pedidoEditandoComissao.percentual_anterior,
+    novo_percentual: novoPercentual
+  };
+
+  postParaAppsScript(payload)
+    .then(function (resp) {
+      if (resp && resp.erro) { alert('Erro ao enviar alteração: ' + resp.erro); return; }
+
+      // Atualização otimista local — o valor real só é confirmado quando
+      // o monitor_pedidos.py aplicar o UPDATE no CIGAM e o próximo sync rodar.
+      var c = Store.comissoes.find(function (x) { return String(x.num_pedido) === String(pedidoEditandoComissao.num_pedido); });
+      if (c) {
+        c.percentual_comissao = novoPercentual;
+        c.valor_comissao = Math.round(c.valor_total * (novoPercentual / 100) * 100) / 100;
+        c.alteracao_pendente = true;
+      }
+
+      fecharModalEditarComissao();
+      renderizarStatsMetaRep(modalRepCodAtual);
+      renderizarModalRepresentante();
+      renderizarComissoes();
+    })
+    .catch(function (erro) { alert('Erro ao enviar alteração: ' + erro.message); });
 }
 
 // ============================================================
