@@ -130,6 +130,8 @@ function processarPacote(pacote) {
     c.valor_total = Number(c.valor_total || 0);
     c.percentual_comissao = Number(c.percentual_comissao || 0);
     c.valor_comissao = Number(c.valor_comissao || 0);
+    Store.metas = pacote.metas || [];
+  Store.comissoesFixas = pacote.comissoesFixas || [];
     return c;
   });
 
