@@ -243,6 +243,27 @@
     </div>
   </div>
 
+  <!-- POPUP MODAL DE EDIÇÃO DE COMISSÃO (por pedido) -->
+  <div class="modal-overlay" id="modal-editar-comissao">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-editar-comissao-titulo">Editar Comissão do Pedido</h3>
+        <button class="modal-close" onclick="fecharModalEditarComissao()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-group" style="margin-bottom: 12px;">
+          <label for="editar-comissao-atual">Comissão Atual (%)</label>
+          <input type="text" id="editar-comissao-atual" disabled>
+        </div>
+        <div class="field-group" style="margin-bottom: 16px;">
+          <label for="editar-comissao-novo">Novo Percentual (%)</label>
+          <input type="number" id="editar-comissao-novo" step="0.01" min="0" placeholder="Ex: 5.50">
+        </div>
+        <button class="btn-sync" onclick="salvarComissaoPedido()">Salvar Alteração</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SCRIPTS DO SISTEMA -->
   <script src="dadosapp.js"></script>
   <script src="busca.js"></script>
