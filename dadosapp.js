@@ -21,6 +21,11 @@ var filtroClienteCod = null;
 var filtroRepCod = "TODOS";
 var requisicoesPendentes = 0;
 
+// Repic padrão para cliente com uma única compra (ainda sem intervalo real
+// pra calcular média). Usado em calcularRepicEmMemoria, abrirPendentes e
+// calcularProjecoesDoCliente — manter os três sincronizados.
+var REPIC_PADRAO_CLIENTE_NOVO = 120;
+
 function mostrarCarregando(msg) {
   requisicoesPendentes++;
   document.getElementById('loading-texto').textContent = msg || 'Carregando...';
@@ -191,13 +196,12 @@ function calcularRepicEmMemoria(pedidos) {
       intervalos.push((eventos[i].data - eventos[i - 1].data) / 86400000);
     }
 
-    // Sem intervalos (cliente com uma única compra) = sem dado confiável.
-    // Antes chutava 100 dias fixos; agora fica null, e quem consome esse
-    // valor (abrirPendentes, calcularProjecoesDoCliente) já trata null
-    // caindo no próprio fallback de 365 dias.
+    // Cliente com uma única compra ainda não tem intervalo real pra calcular
+    // média — usa o padrão de cliente novo (120 dias) até fazer o 2º pedido,
+    // quando aí sim passa a valer a média real dos intervalos.
     var repicMedio = intervalos.length > 0
       ? intervalos.reduce(function (s, d) { return s + d; }, 0) / intervalos.length
-      : null;
+      : REPIC_PADRAO_CLIENTE_NOVO;
 
     repicPorCliente[cod] = {
       cod_cliente: cod,
@@ -206,8 +210,9 @@ function calcularRepicEmMemoria(pedidos) {
       qtdCompras: eventos.length,
       ultimaCompraObj: ultimoEvento.data,
       ultimaCompra: formatarData(ultimoEvento.data),
-      repicMedio: repicMedio ? Math.round(repicMedio) : null,
-      proximaCompra: repicMedio ? formatarData(new Date(ultimoEvento.data.getTime() + repicMedio * 86400000)) : null,
+      repicMedio: Math.round(repicMedio),
+      repicEstimado: intervalos.length === 0, // true = ainda é o padrão de 120, não é média real do cliente
+      proximaCompra: formatarData(new Date(ultimoEvento.data.getTime() + repicMedio * 86400000)),
       ticketMedio: Math.round(ticketMedio * 100) / 100,
       eventos: eventos
     };
@@ -219,7 +224,7 @@ function calcularProjecoesDoCliente(infoRepic, anoAtual) {
   if (!infoRepic || !infoRepic.eventos || infoRepic.eventos.length === 0) return [];
 
   var eventos = infoRepic.eventos;
-  var repicMedio = (infoRepic.repicMedio && infoRepic.repicMedio >= 15) ? infoRepic.repicMedio : 365;
+  var repicMedio = (infoRepic.repicMedio && infoRepic.repicMedio >= 15) ? infoRepic.repicMedio : REPIC_PADRAO_CLIENTE_NOVO;
   var projecoes = [];
 
   for (var i = 0; i < eventos.length; i++) {
