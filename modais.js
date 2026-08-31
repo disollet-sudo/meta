@@ -173,18 +173,25 @@ function fecharPendentesEAbrirCliente(cod) { fecharPendentes(); abrirModal(cod);
 
 // ============================================================
 // INATIVOS / PRÉ-INATIVOS
+// Regra fixa (igual pra todos os clientes, sem usar repic individual):
+//   - a partir de 80 dias desde o embarque do último pedido -> aviso
+//     "Inativa em N dia(s)" contando até 90
+//   - aos 90 dias -> "Inativa HOJE"
+//   - acima de 90 dias -> "Já inativou! Pode vender"
 // ============================================================
 var CacheInativos = [];
+var INATIVOS_AVISO_A_PARTIR_DE = 80;
+var INATIVOS_INATIVOU_EM = 90;
 
 function statusInativo(p) {
-  if (p.diasEmbarque < p.repic) {
-    var diasRestantes = p.repic - p.diasEmbarque;
+  if (p.diasEmbarque < INATIVOS_INATIVOU_EM) {
+    var diasRestantes = INATIVOS_INATIVOU_EM - p.diasEmbarque;
     return {
       bucket: 'pre',
-      badgeColor: diasRestantes <= 3 ? '#c5221f' : '#b06000',
+      badgeColor: p.diasEmbarque >= (INATIVOS_INATIVOU_EM - 3) ? '#c5221f' : '#b06000',
       texto: 'Inativa em ' + diasRestantes + ' dia(s)'
     };
-  } else if (p.diasEmbarque === p.repic) {
+  } else if (p.diasEmbarque === INATIVOS_INATIVOU_EM) {
     return { bucket: 'hoje', badgeColor: '#c5221f', texto: 'Inativa HOJE' };
   }
   return { bucket: 'inativou', badgeColor: '#137333', texto: 'Já inativou! Pode vender' };
@@ -207,13 +214,6 @@ function abrirInativos() {
 
   Object.keys(clientesUltimoPedido).forEach(function (codCli) {
     var ultPed = clientesUltimoPedido[codCli];
-    var infoRepic = Store.repicPorCliente[codCli];
-    if (!infoRepic) return;
-
-    // Repic individual do cliente — cliente novo (sem 2º pedido) usa o
-    // padrão global de 120 dias; os demais usam a média real dos intervalos.
-    var repic = (infoRepic.repicMedio && infoRepic.repicMedio >= 15) ? infoRepic.repicMedio : REPIC_PADRAO_CLIENTE_NOVO;
-    var avisoApartirDe = Math.max(repic - 10, 0); // janela de aviso: 10 dias antes do repic estourar
 
     var dataPorPedido = Store.embarquesPorPedido[ultPed.num_pedido] || null;
     var dataPorNome = Store.embarquesPorNome[normalizarNome(ultPed.nome_cliente)] || null;
@@ -227,12 +227,12 @@ function abrirInativos() {
 
     if (dataEmbarque) {
       var diasEmbarque = Math.floor((hoje.getTime() - dataEmbarque.getTime()) / 86400000);
-      if (diasEmbarque >= avisoApartirDe) {
+      if (diasEmbarque >= INATIVOS_AVISO_A_PARTIR_DE) {
         resultado.push({
           cod_cliente: ultPed.cod_cliente, nome: ultPed.nome_cliente, rep: ultPed.cod_rep,
           num_pedido: ultPed.num_pedido,
           dataEmbarqueObj: dataEmbarque, dataEmbarque: formatarData(dataEmbarque),
-          diasEmbarque: diasEmbarque, origemData: origem, repic: repic
+          diasEmbarque: diasEmbarque, origemData: origem
         });
       }
     }
@@ -267,7 +267,7 @@ function renderizarTabelaInativos() {
 
   var html = '<div class="stats-grid cols-3">' +
     '<div class="stat-box"><span>Qtd. Registros</span><b>' + lista.length + '</b></div>' +
-    '<div class="stat-box"><span>Filtro</span><b>Repic individual − 10 dias</b></div>' +
+    '<div class="stat-box"><span>Filtro</span><b>>= 80 dias de embarque</b></div>' +
     '<div class="stat-box"><span>Ordenado por</span><b>Clique nas colunas</b></div></div>';
 
   html += '<div style="margin:10px 0;">' +
@@ -285,18 +285,17 @@ function renderizarTabelaInativos() {
     thOrdenavel(est, 'rep', 'Rep', 'ordenarInativosPor') +
     thOrdenavel(est, 'num_pedido', 'Últ. Pedido', 'ordenarInativosPor') +
     thOrdenavel(est, 'dataEmbarqueObj', 'Data Embarque', 'ordenarInativosPor') +
-    thOrdenavel(est, 'repic', 'Repic', 'ordenarInativosPor') +
     thOrdenavel(est, 'diasEmbarque', 'Dias Embarcado', 'ordenarInativosPor') +
     thFixo('Status') +
     '</tr></thead><tbody>';
 
-  if (lista.length === 0) html += '<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum cliente com esse filtro 🎉</td></tr>';
+  if (lista.length === 0) html += '<tr><td colspan="6" style="text-align:center; color:#999;">Nenhum cliente com esse filtro 🎉</td></tr>';
 
   lista.forEach(function (p) {
     var st = statusInativo(p);
     html += '<tr class="row-click" onclick="fecharInativosEAbrirCliente(\'' + p.cod_cliente + '\')">' +
       '<td>' + p.nome + '</td><td>' + p.rep + '</td><td>' + p.num_pedido + '</td>' +
-      '<td>' + p.dataEmbarque + '</td><td>' + p.repic + ' dias</td><td><b>' + p.diasEmbarque + ' dias</b></td>' +
+      '<td>' + p.dataEmbarque + '</td><td><b>' + p.diasEmbarque + ' dias</b></td>' +
       '<td><span style="color:' + st.badgeColor + '; font-weight:700;">' + st.texto + '</span></td></tr>';
   });
   html += '</tbody></table></div>';
