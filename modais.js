@@ -37,12 +37,20 @@ function fecharModal() {
 }
 
 // ============================================================
-// ORDENAÇÃO CLICÁVEL (Pendentes e Inativos)
+// ORDENAÇÃO CLICÁVEL + CABEÇALHO FIXO (Pendentes e Inativos)
 // ============================================================
 var EstadoOrdenacao = {
   pendentes: { campo: 'diasAtraso', direcao: 'desc' },
   inativos: { campo: 'diasEmbarque', direcao: 'desc' }
 };
+
+var FiltroStatus = {
+  pendentes: 'todos', // todos | leve | moderado | severo
+  inativos: 'todos'   // todos | pre | hoje | inativou
+};
+
+// Estilo aplicado a todo <th>: fixa o cabeçalho no topo ao rolar a tabela.
+var TH_STICKY_STYLE = 'position:sticky; top:0; background:#f7f7f7; z-index:2; box-shadow: 0 1px 0 #ddd;';
 
 function compararValores(va, vb) {
   if (va === vb) return 0;
@@ -54,13 +62,23 @@ function compararValores(va, vb) {
 
 function thOrdenavel(estado, campo, label, onClickFn) {
   var seta = estado.campo === campo ? (estado.direcao === 'asc' ? ' \u25B2' : ' \u25BC') : '';
-  return '<th class="th-sort" style="cursor:pointer; user-select:none;" title="Clique para ordenar" onclick="' + onClickFn + '(\'' + campo + '\')">' + label + seta + '</th>';
+  return '<th style="' + TH_STICKY_STYLE + ' cursor:pointer; user-select:none;" title="Clique para ordenar" onclick="' + onClickFn + '(\'' + campo + '\')">' + label + seta + '</th>';
+}
+
+function thFixo(label) {
+  return '<th style="' + TH_STICKY_STYLE + '">' + label + '</th>';
 }
 
 // ============================================================
 // PENDENTES
 // ============================================================
 var CachePendentes = [];
+
+function bucketPendente(diasAtraso) {
+  if (diasAtraso <= 15) return 'leve';
+  if (diasAtraso <= 30) return 'moderado';
+  return 'severo';
+}
 
 function abrirPendentes() {
   document.getElementById('modal-pendentes').style.display = 'flex';
@@ -97,9 +115,18 @@ function ordenarPendentesPor(campo) {
   renderizarTabelaPendentes();
 }
 
+function filtrarPendentesPorStatus(valor) {
+  FiltroStatus.pendentes = valor;
+  renderizarTabelaPendentes();
+}
+
 function renderizarTabelaPendentes() {
   var est = EstadoOrdenacao.pendentes;
-  var lista = CachePendentes.slice().sort(function (a, b) {
+  var filtro = FiltroStatus.pendentes;
+
+  var lista = CachePendentes.filter(function (p) {
+    return filtro === 'todos' || bucketPendente(p.diasAtraso) === filtro;
+  }).sort(function (a, b) {
     var cmp = compararValores(a[est.campo], b[est.campo]);
     return est.direcao === 'asc' ? cmp : -cmp;
   });
@@ -111,6 +138,16 @@ function renderizarTabelaPendentes() {
     '<div class="stat-box"><span>Total Pendente</span><b>' + fmtMoeda(Math.round(totalPendente * 100) / 100) + '</b></div>' +
     '<div class="stat-box"><span>Ordenado por</span><b>Clique nas colunas</b></div></div>';
 
+  html += '<div style="margin:10px 0;">' +
+    '<label style="font-size:12px; color:#555; margin-right:6px;">Filtrar por status:</label>' +
+    '<select onchange="filtrarPendentesPorStatus(this.value)">' +
+    '<option value="todos"' + (filtro === 'todos' ? ' selected' : '') + '>Todos</option>' +
+    '<option value="leve"' + (filtro === 'leve' ? ' selected' : '') + '>Atraso leve (até 15 dias)</option>' +
+    '<option value="moderado"' + (filtro === 'moderado' ? ' selected' : '') + '>Atraso moderado (16–30 dias)</option>' +
+    '<option value="severo"' + (filtro === 'severo' ? ' selected' : '') + '>Atraso severo (31+ dias)</option>' +
+    '</select></div>';
+
+  html += '<div style="max-height:60vh; overflow-y:auto;">';
   html += '<table><thead><tr>' +
     thOrdenavel(est, 'nome', 'Cliente', 'ordenarPendentesPor') +
     thOrdenavel(est, 'rep', 'Rep', 'ordenarPendentesPor') +
@@ -119,14 +156,14 @@ function renderizarTabelaPendentes() {
     thOrdenavel(est, 'diasAtraso', 'Dias Atraso', 'ordenarPendentesPor') +
     '</tr></thead><tbody>';
 
-  if (lista.length === 0) html += '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum cliente pendente no momento 🎉</td></tr>';
+  if (lista.length === 0) html += '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum cliente pendente com esse filtro 🎉</td></tr>';
   lista.forEach(function (p) {
     html += '<tr class="row-click" onclick="fecharPendentesEAbrirCliente(\'' + p.cod_cliente + '\')">' +
       '<td>' + p.nome + '</td><td>' + p.rep + '</td><td>' + p.dataPrevista + '</td>' +
       '<td>' + fmtMoeda(p.valorEsperado) + '</td>' +
       '<td style="color:#c5221f; font-weight:700;">' + p.diasAtraso + ' dias</td></tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   document.getElementById('pendentes-conteudo').innerHTML = html;
 }
@@ -138,6 +175,20 @@ function fecharPendentesEAbrirCliente(cod) { fecharPendentes(); abrirModal(cod);
 // INATIVOS / PRÉ-INATIVOS
 // ============================================================
 var CacheInativos = [];
+
+function statusInativo(p) {
+  if (p.diasEmbarque < p.repic) {
+    var diasRestantes = p.repic - p.diasEmbarque;
+    return {
+      bucket: 'pre',
+      badgeColor: diasRestantes <= 3 ? '#c5221f' : '#b06000',
+      texto: 'Inativa em ' + diasRestantes + ' dia(s)'
+    };
+  } else if (p.diasEmbarque === p.repic) {
+    return { bucket: 'hoje', badgeColor: '#c5221f', texto: 'Inativa HOJE' };
+  }
+  return { bucket: 'inativou', badgeColor: '#137333', texto: 'Já inativou! Pode vender' };
+}
 
 function abrirInativos() {
   document.getElementById('modal-inativos').style.display = 'flex';
@@ -198,9 +249,18 @@ function ordenarInativosPor(campo) {
   renderizarTabelaInativos();
 }
 
+function filtrarInativosPorStatus(valor) {
+  FiltroStatus.inativos = valor;
+  renderizarTabelaInativos();
+}
+
 function renderizarTabelaInativos() {
   var est = EstadoOrdenacao.inativos;
-  var lista = CacheInativos.slice().sort(function (a, b) {
+  var filtro = FiltroStatus.inativos;
+
+  var lista = CacheInativos.filter(function (p) {
+    return filtro === 'todos' || statusInativo(p).bucket === filtro;
+  }).sort(function (a, b) {
     var cmp = compararValores(a[est.campo], b[est.campo]);
     return est.direcao === 'asc' ? cmp : -cmp;
   });
@@ -210,6 +270,16 @@ function renderizarTabelaInativos() {
     '<div class="stat-box"><span>Filtro</span><b>Repic individual − 10 dias</b></div>' +
     '<div class="stat-box"><span>Ordenado por</span><b>Clique nas colunas</b></div></div>';
 
+  html += '<div style="margin:10px 0;">' +
+    '<label style="font-size:12px; color:#555; margin-right:6px;">Filtrar por status:</label>' +
+    '<select onchange="filtrarInativosPorStatus(this.value)">' +
+    '<option value="todos"' + (filtro === 'todos' ? ' selected' : '') + '>Todos</option>' +
+    '<option value="pre"' + (filtro === 'pre' ? ' selected' : '') + '>Pré-inativo (vai inativar)</option>' +
+    '<option value="hoje"' + (filtro === 'hoje' ? ' selected' : '') + '>Inativa hoje</option>' +
+    '<option value="inativou"' + (filtro === 'inativou' ? ' selected' : '') + '>Já inativou</option>' +
+    '</select></div>';
+
+  html += '<div style="max-height:60vh; overflow-y:auto;">';
   html += '<table><thead><tr>' +
     thOrdenavel(est, 'nome', 'Cliente', 'ordenarInativosPor') +
     thOrdenavel(est, 'rep', 'Rep', 'ordenarInativosPor') +
@@ -217,28 +287,19 @@ function renderizarTabelaInativos() {
     thOrdenavel(est, 'dataEmbarqueObj', 'Data Embarque', 'ordenarInativosPor') +
     thOrdenavel(est, 'repic', 'Repic', 'ordenarInativosPor') +
     thOrdenavel(est, 'diasEmbarque', 'Dias Embarcado', 'ordenarInativosPor') +
-    '<th>Status</th></tr></thead><tbody>';
+    thFixo('Status') +
+    '</tr></thead><tbody>';
 
-  if (lista.length === 0) html += '<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum cliente próximo de inativar 🎉</td></tr>';
+  if (lista.length === 0) html += '<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum cliente com esse filtro 🎉</td></tr>';
 
   lista.forEach(function (p) {
-    var badgeColor, txtStatus;
-    if (p.diasEmbarque < p.repic) {
-      var diasRestantes = p.repic - p.diasEmbarque;
-      badgeColor = diasRestantes <= 3 ? '#c5221f' : '#b06000';
-      txtStatus = 'Inativa em ' + diasRestantes + ' dia(s)';
-    } else if (p.diasEmbarque === p.repic) {
-      badgeColor = '#c5221f'; txtStatus = 'Inativa HOJE';
-    } else {
-      badgeColor = '#137333'; txtStatus = 'Já inativou! Pode vender';
-    }
-
+    var st = statusInativo(p);
     html += '<tr class="row-click" onclick="fecharInativosEAbrirCliente(\'' + p.cod_cliente + '\')">' +
       '<td>' + p.nome + '</td><td>' + p.rep + '</td><td>' + p.num_pedido + '</td>' +
       '<td>' + p.dataEmbarque + '</td><td>' + p.repic + ' dias</td><td><b>' + p.diasEmbarque + ' dias</b></td>' +
-      '<td><span style="color:' + badgeColor + '; font-weight:700;">' + txtStatus + '</span></td></tr>';
+      '<td><span style="color:' + st.badgeColor + '; font-weight:700;">' + st.texto + '</span></td></tr>';
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   document.getElementById('inativos-conteudo').innerHTML = html;
 }
