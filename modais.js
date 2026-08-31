@@ -36,12 +36,37 @@ function fecharModal() {
   document.getElementById('modal-cliente').style.display = 'none';
 }
 
+// ============================================================
+// ORDENAÇÃO CLICÁVEL (Pendentes e Inativos)
+// ============================================================
+var EstadoOrdenacao = {
+  pendentes: { campo: 'diasAtraso', direcao: 'desc' },
+  inativos: { campo: 'diasEmbarque', direcao: 'desc' }
+};
+
+function compararValores(va, vb) {
+  if (va === vb) return 0;
+  if (va === null || va === undefined) return -1;
+  if (vb === null || vb === undefined) return 1;
+  if (typeof va === 'string') return va.localeCompare(vb, 'pt-BR', { sensitivity: 'base' });
+  return va - vb; // números e datas (Date - Date funciona nativamente)
+}
+
+function thOrdenavel(estado, campo, label, onClickFn) {
+  var seta = estado.campo === campo ? (estado.direcao === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+  return '<th class="th-sort" style="cursor:pointer; user-select:none;" title="Clique para ordenar" onclick="' + onClickFn + '(\'' + campo + '\')">' + label + seta + '</th>';
+}
+
+// ============================================================
+// PENDENTES
+// ============================================================
+var CachePendentes = [];
+
 function abrirPendentes() {
   document.getElementById('modal-pendentes').style.display = 'flex';
 
   var hoje = new Date();
   var pendentes = [];
-  var totalPendente = 0;
 
   Object.keys(Store.repicPorCliente).forEach(function (codCliente) {
     if (filtroClienteCod && String(codCliente) !== String(filtroClienteCod)) return;
@@ -55,22 +80,47 @@ function abrirPendentes() {
       var diasAtraso = Math.floor((hoje - proximaEsperadaObj) / 86400000);
       pendentes.push({
         cod_cliente: codCliente, nome: info.nome, rep: info.rep,
-        dataPrevista: formatarData(proximaEsperadaObj), valorEsperado: info.ticketMedio, diasAtraso: diasAtraso
+        dataPrevistaObj: proximaEsperadaObj, dataPrevista: formatarData(proximaEsperadaObj),
+        valorEsperado: info.ticketMedio, diasAtraso: diasAtraso
       });
-      totalPendente += info.ticketMedio;
     }
   });
 
-  pendentes.sort(function (a, b) { return b.diasAtraso - a.diasAtraso; });
+  CachePendentes = pendentes;
+  renderizarTabelaPendentes();
+}
+
+function ordenarPendentesPor(campo) {
+  var est = EstadoOrdenacao.pendentes;
+  if (est.campo === campo) { est.direcao = est.direcao === 'asc' ? 'desc' : 'asc'; }
+  else { est.campo = campo; est.direcao = 'asc'; }
+  renderizarTabelaPendentes();
+}
+
+function renderizarTabelaPendentes() {
+  var est = EstadoOrdenacao.pendentes;
+  var lista = CachePendentes.slice().sort(function (a, b) {
+    var cmp = compararValores(a[est.campo], b[est.campo]);
+    return est.direcao === 'asc' ? cmp : -cmp;
+  });
+
+  var totalPendente = lista.reduce(function (s, p) { return s + p.valorEsperado; }, 0);
 
   var html = '<div class="stats-grid cols-3">' +
-    '<div class="stat-box"><span>Qtd. Pendentes</span><b>' + pendentes.length + '</b></div>' +
+    '<div class="stat-box"><span>Qtd. Pendentes</span><b>' + lista.length + '</b></div>' +
     '<div class="stat-box"><span>Total Pendente</span><b>' + fmtMoeda(Math.round(totalPendente * 100) / 100) + '</b></div>' +
-    '<div class="stat-box"><span>Ordenado por</span><b>Mais atrasado primeiro</b></div></div>';
+    '<div class="stat-box"><span>Ordenado por</span><b>Clique nas colunas</b></div></div>';
 
-  html += '<table><thead><tr><th>Cliente</th><th>Rep</th><th>Previsto para</th><th>Valor Esperado</th><th>Dias Atraso</th></tr></thead><tbody>';
-  if (pendentes.length === 0) html += '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum cliente pendente no momento 🎉</td></tr>';
-  pendentes.forEach(function (p) {
+  html += '<table><thead><tr>' +
+    thOrdenavel(est, 'nome', 'Cliente', 'ordenarPendentesPor') +
+    thOrdenavel(est, 'rep', 'Rep', 'ordenarPendentesPor') +
+    thOrdenavel(est, 'dataPrevistaObj', 'Previsto para', 'ordenarPendentesPor') +
+    thOrdenavel(est, 'valorEsperado', 'Valor Esperado', 'ordenarPendentesPor') +
+    thOrdenavel(est, 'diasAtraso', 'Dias Atraso', 'ordenarPendentesPor') +
+    '</tr></thead><tbody>';
+
+  if (lista.length === 0) html += '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum cliente pendente no momento 🎉</td></tr>';
+  lista.forEach(function (p) {
     html += '<tr class="row-click" onclick="fecharPendentesEAbrirCliente(\'' + p.cod_cliente + '\')">' +
       '<td>' + p.nome + '</td><td>' + p.rep + '</td><td>' + p.dataPrevista + '</td>' +
       '<td>' + fmtMoeda(p.valorEsperado) + '</td>' +
@@ -83,6 +133,11 @@ function abrirPendentes() {
 
 function fecharPendentes() { document.getElementById('modal-pendentes').style.display = 'none'; }
 function fecharPendentesEAbrirCliente(cod) { fecharPendentes(); abrirModal(cod); }
+
+// ============================================================
+// INATIVOS / PRÉ-INATIVOS
+// ============================================================
+var CacheInativos = [];
 
 function abrirInativos() {
   document.getElementById('modal-inativos').style.display = 'flex';
@@ -124,24 +179,49 @@ function abrirInativos() {
       if (diasEmbarque >= avisoApartirDe) {
         resultado.push({
           cod_cliente: ultPed.cod_cliente, nome: ultPed.nome_cliente, rep: ultPed.cod_rep,
-          num_pedido: ultPed.num_pedido, dataEmbarque: formatarData(dataEmbarque),
+          num_pedido: ultPed.num_pedido,
+          dataEmbarqueObj: dataEmbarque, dataEmbarque: formatarData(dataEmbarque),
           diasEmbarque: diasEmbarque, origemData: origem, repic: repic
         });
       }
     }
   });
 
-  resultado.sort(function (a, b) { return b.diasEmbarque - a.diasEmbarque; });
+  CacheInativos = resultado;
+  renderizarTabelaInativos();
+}
+
+function ordenarInativosPor(campo) {
+  var est = EstadoOrdenacao.inativos;
+  if (est.campo === campo) { est.direcao = est.direcao === 'asc' ? 'desc' : 'asc'; }
+  else { est.campo = campo; est.direcao = 'asc'; }
+  renderizarTabelaInativos();
+}
+
+function renderizarTabelaInativos() {
+  var est = EstadoOrdenacao.inativos;
+  var lista = CacheInativos.slice().sort(function (a, b) {
+    var cmp = compararValores(a[est.campo], b[est.campo]);
+    return est.direcao === 'asc' ? cmp : -cmp;
+  });
 
   var html = '<div class="stats-grid cols-3">' +
-    '<div class="stat-box"><span>Qtd. Registros</span><b>' + resultado.length + '</b></div>' +
+    '<div class="stat-box"><span>Qtd. Registros</span><b>' + lista.length + '</b></div>' +
     '<div class="stat-box"><span>Filtro</span><b>Repic individual − 10 dias</b></div>' +
-    '<div class="stat-box"><span>Ordenado por</span><b>Mais tempo de embarque</b></div></div>';
+    '<div class="stat-box"><span>Ordenado por</span><b>Clique nas colunas</b></div></div>';
 
-  html += '<table><thead><tr><th>Cliente</th><th>Rep</th><th>Últ. Pedido</th><th>Data Embarque</th><th>Repic</th><th>Dias Embarcado</th><th>Status</th></tr></thead><tbody>';
-  if (resultado.length === 0) html += '<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum cliente próximo de inativar 🎉</td></tr>';
+  html += '<table><thead><tr>' +
+    thOrdenavel(est, 'nome', 'Cliente', 'ordenarInativosPor') +
+    thOrdenavel(est, 'rep', 'Rep', 'ordenarInativosPor') +
+    thOrdenavel(est, 'num_pedido', 'Últ. Pedido', 'ordenarInativosPor') +
+    thOrdenavel(est, 'dataEmbarqueObj', 'Data Embarque', 'ordenarInativosPor') +
+    thOrdenavel(est, 'repic', 'Repic', 'ordenarInativosPor') +
+    thOrdenavel(est, 'diasEmbarque', 'Dias Embarcado', 'ordenarInativosPor') +
+    '<th>Status</th></tr></thead><tbody>';
 
-  resultado.forEach(function (p) {
+  if (lista.length === 0) html += '<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum cliente próximo de inativar 🎉</td></tr>';
+
+  lista.forEach(function (p) {
     var badgeColor, txtStatus;
     if (p.diasEmbarque < p.repic) {
       var diasRestantes = p.repic - p.diasEmbarque;
