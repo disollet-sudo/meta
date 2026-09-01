@@ -5,6 +5,7 @@ function abrirModal(codCliente) {
   var pedidosCliente = Store.pedidos.filter(function (p) { return String(p.cod_cliente) === String(codCliente); })
     .sort(function (a, b) { return b.data - a.data; });
   var totalGeral = pedidosCliente.reduce(function (s, p) { return s + p.valor; }, 0);
+  var divida = Store.dividasPorCliente[codCliente] || null;
 
   document.getElementById('modal-nome-cliente').textContent = r ? r.nome : "Cliente " + codCliente;
 
@@ -20,7 +21,20 @@ function abrirModal(codCliente) {
     '<div class="stat-box"><span>Total Comprado</span><b>' + fmtMoeda(Math.round(totalGeral * 100) / 100) + '</b></div>' +
     '<div class="stat-box"><span>Última Compra</span><b>' + (r ? r.ultimaCompra : '—') + '</b></div>' +
     '<div class="stat-box"><span>Próxima Prevista</span><b>' + (r && r.proximaCompra ? r.proximaCompra : '—') + '</b></div>' +
+    '<div class="stat-box"><span>Situação Financeira</span><b style="color:' + (divida ? '#c5221f' : '#137333') + '">' +
+      (divida ? '-' + fmtMoeda(divida.totalDevido) : 'Em dia') + '</b></div>' +
     '</div>';
+
+  if (divida) {
+    html += '<h4 style="margin: 16px 0 6px 0; font-size: 13px; color:#c5221f;">💸 Títulos em Aberto (Devendo: -' + fmtMoeda(divida.totalDevido) + ')</h4>';
+    html += '<table><thead><tr><th>Pedido</th><th>NF</th><th>Parcela</th><th>Vencimento</th><th>Saldo</th></tr></thead><tbody>';
+    divida.titulos.forEach(function (t) {
+      html += '<tr><td>' + t.num_pedido + '</td><td>' + t.nota_fiscal + '</td><td>' + t.parcela + '</td>' +
+        '<td>' + formatarData(t.vencimento) + '</td>' +
+        '<td style="color:#c5221f; font-weight:700;">' + fmtMoeda(t.saldo || t.valor) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
 
   html += '<h4 style="margin: 12px 0 6px 0; font-size: 13px;">Histórico de Pedidos</h4>';
   html += '<table><thead><tr><th>Pedido</th><th>Data</th><th>Rep</th><th>Valor</th></tr></thead><tbody>';
@@ -37,11 +51,12 @@ function fecharModal() {
 }
 
 // ============================================================
-// ORDENAÇÃO CLICÁVEL + CABEÇALHO FIXO (Pendentes e Inativos)
+// ORDENAÇÃO CLICÁVEL + CABEÇALHO FIXO (Pendentes, Inativos, Devedores)
 // ============================================================
 var EstadoOrdenacao = {
   pendentes: { campo: 'diasAtraso', direcao: 'desc' },
-  inativos: { campo: 'diasEmbarque', direcao: 'desc' }
+  inativos: { campo: 'diasEmbarque', direcao: 'desc' },
+  devedores: { campo: 'totalDevido', direcao: 'desc' }
 };
 
 var FiltroStatus = {
@@ -67,6 +82,14 @@ function thOrdenavel(estado, campo, label, onClickFn) {
 
 function thFixo(label) {
   return '<th style="' + TH_STICKY_STYLE + '">' + label + '</th>';
+}
+
+// Badge "-$ valor" mostrado do lado do nome do cliente quando ele está
+// devendo (usado nas tabelas de Pendentes e Inativos).
+function badgeDivida(codCliente) {
+  var d = Store.dividasPorCliente && Store.dividasPorCliente[codCliente];
+  if (!d || d.totalDevido <= 0) return '';
+  return ' <span style="color:#c5221f; font-weight:700;" title="' + d.titulos.length + ' título(s) vencido(s)">-' + fmtMoeda(d.totalDevido) + '</span>';
 }
 
 // ============================================================
@@ -159,7 +182,7 @@ function renderizarTabelaPendentes() {
   if (lista.length === 0) html += '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum cliente pendente com esse filtro 🎉</td></tr>';
   lista.forEach(function (p) {
     html += '<tr class="row-click" onclick="fecharPendentesEAbrirCliente(\'' + p.cod_cliente + '\')">' +
-      '<td>' + p.nome + '</td><td>' + p.rep + '</td><td>' + p.dataPrevista + '</td>' +
+      '<td>' + p.nome + badgeDivida(p.cod_cliente) + '</td><td>' + p.rep + '</td><td>' + p.dataPrevista + '</td>' +
       '<td>' + fmtMoeda(p.valorEsperado) + '</td>' +
       '<td style="color:#c5221f; font-weight:700;">' + p.diasAtraso + ' dias</td></tr>';
   });
@@ -294,7 +317,7 @@ function renderizarTabelaInativos() {
   lista.forEach(function (p) {
     var st = statusInativo(p);
     html += '<tr class="row-click" onclick="fecharInativosEAbrirCliente(\'' + p.cod_cliente + '\')">' +
-      '<td>' + p.nome + '</td><td>' + p.rep + '</td><td>' + p.num_pedido + '</td>' +
+      '<td>' + p.nome + badgeDivida(p.cod_cliente) + '</td><td>' + p.rep + '</td><td>' + p.num_pedido + '</td>' +
       '<td>' + p.dataEmbarque + '</td><td><b>' + p.diasEmbarque + ' dias</b></td>' +
       '<td><span style="color:' + st.badgeColor + '; font-weight:700;">' + st.texto + '</span></td></tr>';
   });
@@ -305,3 +328,73 @@ function renderizarTabelaInativos() {
 
 function fecharInativos() { document.getElementById('modal-inativos').style.display = 'none'; }
 function fecharInativosEAbrirCliente(cod) { fecharInativos(); abrirModal(cod); }
+
+// ============================================================
+// DEVEDORES (títulos vencidos, sem baixa)
+// ============================================================
+var CacheDevedores = [];
+
+function abrirDevedores() {
+  document.getElementById('modal-devedores').style.display = 'flex';
+
+  var lista = [];
+  Object.keys(Store.dividasPorCliente || {}).forEach(function (cod) {
+    if (filtroClienteCod && String(cod) !== String(filtroClienteCod)) return;
+    var d = Store.dividasPorCliente[cod];
+    var infoCliente = Store.clientes[cod] || Store.repicPorCliente[cod];
+    var rep = infoCliente ? infoCliente.rep : '—';
+    if (filtroRepCod && filtroRepCod !== "TODOS" && String(rep) !== String(filtroRepCod)) return;
+
+    lista.push({
+      cod_cliente: cod, nome: d.nome, rep: rep,
+      qtdTitulos: d.titulos.length, totalDevido: d.totalDevido
+    });
+  });
+
+  CacheDevedores = lista;
+  renderizarTabelaDevedores();
+}
+
+function ordenarDevedoresPor(campo) {
+  var est = EstadoOrdenacao.devedores;
+  if (est.campo === campo) { est.direcao = est.direcao === 'asc' ? 'desc' : 'asc'; }
+  else { est.campo = campo; est.direcao = 'asc'; }
+  renderizarTabelaDevedores();
+}
+
+function renderizarTabelaDevedores() {
+  var est = EstadoOrdenacao.devedores;
+  var lista = CacheDevedores.slice().sort(function (a, b) {
+    var cmp = compararValores(a[est.campo], b[est.campo]);
+    return est.direcao === 'asc' ? cmp : -cmp;
+  });
+
+  var totalGeral = lista.reduce(function (s, d) { return s + d.totalDevido; }, 0);
+
+  var html = '<div class="stats-grid cols-3">' +
+    '<div class="stat-box"><span>Qtd. Devedores</span><b>' + lista.length + '</b></div>' +
+    '<div class="stat-box"><span>Total Devido</span><b style="color:#c5221f;">-' + fmtMoeda(Math.round(totalGeral * 100) / 100) + '</b></div>' +
+    '<div class="stat-box"><span>Ordenado por</span><b>Clique nas colunas</b></div></div>';
+
+  html += '<div style="max-height:60vh; overflow-y:auto;">';
+  html += '<table><thead><tr>' +
+    thOrdenavel(est, 'nome', 'Cliente', 'ordenarDevedoresPor') +
+    thOrdenavel(est, 'rep', 'Rep', 'ordenarDevedoresPor') +
+    thOrdenavel(est, 'qtdTitulos', 'Títulos em Aberto', 'ordenarDevedoresPor') +
+    thOrdenavel(est, 'totalDevido', 'Total Devido', 'ordenarDevedoresPor') +
+    '</tr></thead><tbody>';
+
+  if (lista.length === 0) html += '<tr><td colspan="4" style="text-align:center; color:#999;">Nenhum cliente devendo 🎉</td></tr>';
+
+  lista.forEach(function (d) {
+    html += '<tr class="row-click" onclick="fecharDevedoresEAbrirCliente(\'' + d.cod_cliente + '\')">' +
+      '<td>' + d.nome + '</td><td>' + d.rep + '</td><td>' + d.qtdTitulos + '</td>' +
+      '<td style="color:#c5221f; font-weight:700;">-' + fmtMoeda(d.totalDevido) + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  document.getElementById('devedores-conteudo').innerHTML = html;
+}
+
+function fecharDevedores() { document.getElementById('modal-devedores').style.display = 'none'; }
+function fecharDevedoresEAbrirCliente(cod) { fecharDevedores(); abrirModal(cod); }
