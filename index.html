@@ -52,6 +52,7 @@
 
       <button class="btn-inativos" onclick="abrirInativos()">⚠️ Inativos</button>
       <button class="btn-pendentes" onclick="abrirPendentes()">🔴 Ver Pendentes</button>
+      <button class="btn-pendentes" style="background:#8b0000" onclick="abrirDevedores()">💸 Devedores</button>
       <button class="btn-clear" onclick="limparFiltros()">Limpar Filtros</button>
     </div>
 
@@ -168,6 +169,17 @@
         <button class="modal-close" onclick="fecharInativos()">&times;</button>
       </div>
       <div class="modal-body" id="inativos-conteudo">Carregando dados de inativação...</div>
+    </div>
+  </div>
+
+  <!-- POPUP MODAL DE DEVEDORES -->
+  <div class="modal-overlay" id="modal-devedores">
+    <div class="modal-card wide">
+      <div class="modal-header danger">
+        <h3>💸 Clientes Devendo (títulos vencidos e não pagos)</h3>
+        <button class="modal-close" onclick="fecharDevedores()">&times;</button>
+      </div>
+      <div class="modal-body" id="devedores-conteudo">Carregando dívidas...</div>
     </div>
   </div>
 
