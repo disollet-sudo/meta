@@ -1,5 +1,5 @@
 // COLOQUE AQUI A URL DO SEU WEB APP DO GOOGLE APPS SCRIPT
-var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwLniTudgxKdrBdO0X6B-agjstykjl_saVykKjBNBrdIJJzdGbtTlba9sAs8CN_E8nMOQ/exec";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzZr-O8Xe2i0DPakyJoSU6ZYDAbE_hDOx8SNyW3Udx_SBKzVetaAuNXGOsOemxiGVWS3g/exec";
 
 // ============================================================
 // ESTADO DA APLICAÇÃO
@@ -15,6 +15,8 @@ var Store = {
   carregado: false,
   metas: [],
   comissoesFixas: [],
+  titulosVencidos: [],           // <-- novo
+  dividasPorCliente: {},         // <-- novo
   ultimaSincronizacao: null
 };
 var filtroClienteCod = null;
@@ -98,7 +100,8 @@ function processarPacote(pacote) {
     return;
   }
 
-  // Converte datas em texto (DD/MM/AAAA ou ISO) para objeto Date
+  // Converte datas em texto (DD/MM/AAAA ou ISO) para objeto Date.
+  // Usado onde uma data "vazia" pode virar "agora" sem problema.
   function tratarData(dStr) {
     if (!dStr) return new Date();
     if (dStr instanceof Date) return dStr;
@@ -108,6 +111,20 @@ function processarPacote(pacote) {
     }
     var dt = new Date(dStr);
     return isNaN(dt.getTime()) ? new Date() : dt;
+  }
+
+  // Parser de data que preserva null quando vier vazio (diferente de
+  // tratarData, que sempre cai pra new Date() — aqui isso quebraria a
+  // regra de "ultima_liquidacao vazia = ainda devendo").
+  function tratarDataOuNull(dStr) {
+    if (!dStr) return null;
+    if (dStr instanceof Date) return dStr;
+    if (typeof dStr === 'string' && dStr.includes('/')) {
+      var partes = dStr.split('/');
+      if (partes.length === 3) return new Date(partes[2], partes[1] - 1, partes[0]);
+    }
+    var dt = new Date(dStr);
+    return isNaN(dt.getTime()) ? null : dt;
   }
 
   Store.pedidos = (pacote.pedidos || []).map(function (p) {
@@ -139,6 +156,16 @@ function processarPacote(pacote) {
   Store.comissoesFixas = pacote.comissoesFixas || [];
     return c;
   });
+
+  // Títulos vencidos (dívida) + cálculo de quem está devendo.
+  Store.titulosVencidos = (pacote.titulosVencidos || []).map(function (t) {
+    t.vencimento = tratarDataOuNull(t.vencimento);
+    t.ultima_liquidacao = tratarDataOuNull(t.ultima_liquidacao);
+    t.valor = Number(t.valor || 0);
+    t.saldo = Number(t.saldo || 0);
+    return t;
+  });
+  Store.dividasPorCliente = calcularDividasEmMemoria(Store.titulosVencidos);
 
   Store.ultimaSincronizacao = pacote.geradoEm ? tratarData(pacote.geradoEm) : new Date();
   Store.carregado = true;
@@ -263,4 +290,36 @@ function calcularProjecoesDoCliente(infoRepic, anoAtual) {
   }
 
   return projecoes;
+}
+
+// ============================================================
+// DÍVIDAS (títulos vencidos, sem baixa)
+// Regra: vencimento < hoje E ultima_liquidacao vazia -> devendo.
+// Se ultima_liquidacao tiver data, o título já foi pago.
+// ============================================================
+function calcularDividasEmMemoria(titulos) {
+  var hoje = new Date();
+  var porCliente = {};
+
+  titulos.forEach(function (t) {
+    if (!t.cod_cliente || !t.vencimento) return;
+
+    var pago = !!t.ultima_liquidacao;
+    var vencido = t.vencimento < hoje;
+
+    if (!pago && vencido) {
+      if (!porCliente[t.cod_cliente]) {
+        porCliente[t.cod_cliente] = { cod_cliente: t.cod_cliente, nome: t.nome_cliente, titulos: [], totalDevido: 0 };
+      }
+      porCliente[t.cod_cliente].titulos.push(t);
+      porCliente[t.cod_cliente].totalDevido += (t.saldo || t.valor || 0);
+    }
+  });
+
+  Object.keys(porCliente).forEach(function (cod) {
+    porCliente[cod].titulos.sort(function (a, b) { return a.vencimento - b.vencimento; });
+    porCliente[cod].totalDevido = Math.round(porCliente[cod].totalDevido * 100) / 100;
+  });
+
+  return porCliente;
 }
